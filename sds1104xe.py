@@ -22,7 +22,7 @@ from litex.soc.cores.spi import SPIMaster
 from liteeth.phy.mii import LiteEthPHYMII
 
 from peripherals.offsetdac import OffsetDac
-from peripherals.adc import LvdsReceiver
+from peripherals.adc import ADCLVDSReceiver
 
 from litescope import LiteScopeAnalyzer
 
@@ -133,10 +133,10 @@ class ScopeSoC(SoCMini):
             ("lclk_n", 1, DIR_M_TO_S),
         ]
 
-        self.submodules.adcif0 = LvdsReceiver(self.platform.request("adc", 0), 0)
+        self.submodules.adcif0 = ADCLVDSReceiver(self.platform.request("adc", 0), 0)
         self.add_csr("adcif0")
 
-        self.submodules.adcif1 = LvdsReceiver(self.platform.request("adc", 1), 1)
+        self.submodules.adcif1 = ADCLVDSReceiver(self.platform.request("adc", 1), 1)
         self.add_csr("adcif1")
 
 
