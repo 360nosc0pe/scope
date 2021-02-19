@@ -21,7 +21,7 @@ from litex.soc.cores.spi import SPIMaster
 
 from liteeth.phy.mii import LiteEthPHYMII
 
-from peripherals.offsetdac import OffsetDac
+from peripherals.offsetdac import OffsetDAC
 from peripherals.adc import ADCLVDSReceiver
 
 from litescope import LiteScopeAnalyzer
@@ -66,7 +66,7 @@ class ScopeSoC(SoCMini):
         # Scope ------------------------------------------------------------------------------------
 
         # Offset DAC/MUX
-        self.submodules.offset_dac = OffsetDac(platform.request("offsetdac"), platform.request("offsetmux"))
+        self.submodules.offset_dac = OffsetDAC(platform.request("offsetdac"), platform.request("offsetmux"))
         self.add_csr("offset_dac")
 
         # SPI for

@@ -1,38 +1,43 @@
 from migen import *
-from litex.soc.interconnect import axi, csr_bus, csr
+
+from litex.soc.interconnect.csr import *
+
+# Layouts ------------------------------------------------------------------------------------------
 
 SPI = [
-    ("SCLK", 1, DIR_M_TO_S),
-    ("DIN", 1, DIR_M_TO_S),
+    ("SCLK",  1, DIR_M_TO_S),
+    ("DIN",   1, DIR_M_TO_S),
     ("nSYNC", 1, DIR_M_TO_S)
 ]
 
 MUX = [
     ("nE", 1, DIR_M_TO_S),
-    ("S", 3, DIR_M_TO_S),
+    ("S",  3, DIR_M_TO_S),
 ]
 
-class OffsetDac(Module, csr.AutoCSR):
+# Offset DAC ---------------------------------------------------------------------------------------
+
+class OffsetDAC(Module, AutoCSR):
     def __init__(self, offsetdac_pads, offsetmux_pads):
-        self._status = csr.CSRStatus(32, name='status', reset=0x0ffdac)
-        self.spi = Record(SPI)
-        self.mux = Record(MUX)
+        self._status = CSRStatus(32, name='status', reset=0x0ffdac)
+        self.spi     = Record(SPI)
+        self.mux     = Record(MUX)
 
         self.comb += self.spi.connect(offsetdac_pads)
         self.comb += self.mux.connect(offsetmux_pads)
 
-        self._control = csr.CSRStorage(32, name='control') # DAC PD control
-        self._clkdiv = csr.CSRStorage(32, name='clkdiv', reset=326) # roughly matches original timing
-        self._enable = csr.CSRStorage(32, name='enable', reset=1)
+        self._control = CSRStorage(32, name='control') # DAC PD control
+        self._clkdiv  = CSRStorage(32, name='clkdiv', reset=326) # roughly matches original timing
+        self._enable  = CSRStorage(32, name='enable', reset=1)
 
-        self._v0 = csr.CSRStorage(32, name='v0', reset = 0x8000) # unused
-        self._v1 = csr.CSRStorage(32, name='v1', reset = 0x8000) # unused
-        self._v2 = csr.CSRStorage(32, name='v2', reset = 0x8000) # unused
-        self._v3 = csr.CSRStorage(32, name='v3', reset = 0x8000) # unused
-        self._v4 = csr.CSRStorage(32, name='v4', reset = 0x8000) # CH1 offset
-        self._v5 = csr.CSRStorage(32, name='v5', reset = 0x8000) # CH2 offset
-        self._v6 = csr.CSRStorage(32, name='v6', reset = 0x8000) # CH3 offset
-        self._v7 = csr.CSRStorage(32, name='v7', reset = 0x8000) # CH4 offset
+        self._v0 = CSRStorage(32, name='v0', reset = 0x8000) # unused
+        self._v1 = CSRStorage(32, name='v1', reset = 0x8000) # unused
+        self._v2 = CSRStorage(32, name='v2', reset = 0x8000) # unused
+        self._v3 = CSRStorage(32, name='v3', reset = 0x8000) # unused
+        self._v4 = CSRStorage(32, name='v4', reset = 0x8000) # CH1 offset
+        self._v5 = CSRStorage(32, name='v5', reset = 0x8000) # CH2 offset
+        self._v6 = CSRStorage(32, name='v6', reset = 0x8000) # CH3 offset
+        self._v7 = CSRStorage(32, name='v7', reset = 0x8000) # CH4 offset
 
         # data is transferred on falling edge of SCLK while nSYNC=0
         # data is MSB-first
@@ -88,9 +93,7 @@ class OffsetDac(Module, csr.AutoCSR):
         ]
 
         clk = Signal()
-
         clk_falling = Signal()
-
         self.sync += [
             clk_falling.eq(0),
             If(clkdiv == 0,
@@ -101,12 +104,12 @@ class OffsetDac(Module, csr.AutoCSR):
 
         # FSM
 
-        self.submodules.fsm = FSM(reset_state='start')
+        self.submodules.fsm = FSM(reset_state="START")
 
         dac_data = Array([self._v0.storage, self._v1.storage, self._v2.storage, self._v3.storage,
                           self._v4.storage, self._v5.storage, self._v6.storage, self._v7.storage])
 
-        current_bit = Signal(max=24)
+        current_bit     = Signal(max=24)
         current_channel = Signal(max=8)
 
         pd = Signal(2)
@@ -119,28 +122,28 @@ class OffsetDac(Module, csr.AutoCSR):
             current_dac_word[18:24].eq(0)
         ]
 
-        self.fsm.act('start',
+        self.fsm.act("START",
             If(clk_falling,
                 NextValue(current_bit, 0),
                 NextValue(self.mux.nE, 1),
                 NextValue(self.spi.nSYNC, 1),
                 NextValue(self.spi.DIN, 0),
                 If(self._enable.storage[0],
-                    NextState('transfer'),
+                    NextState("TRANSFER"),
                 ).Else(
                     NextValue(current_channel, 0),
                 ),
             )
         )
 
-        self.fsm.act('transfer',
+        self.fsm.act("TRANSFER",
             If(clk_falling,
                 NextValue(self.spi.nSYNC, 0),
                 NextValue(self.mux.nE, 0),
                 NextValue(self.spi.DIN, Array(current_dac_word)[23 - current_bit]),
                 If(current_bit == 23,
                     NextValue(self.mux.nE, 1),
-                    NextState('start'),
+                    NextState("START"),
                     NextValue(self.mux.S, current_channel),
                     NextValue(current_channel, current_channel + 1)
                 ).Else(NextValue(current_bit, current_bit + 1))
@@ -150,6 +153,7 @@ class OffsetDac(Module, csr.AutoCSR):
         # output SPI CLK (if enabled)
         self.sync += self.spi.SCLK.eq(clk & self._enable.storage[0])
 
+# Simulation ---------------------------------------------------------------------------------------
 
 from litex.gen.fhdl import verilog
 from litex.gen.sim import run_simulation
