@@ -21,7 +21,7 @@ from litex.soc.cores.spi import SPIMaster
 
 from liteeth.phy.mii import LiteEthPHYMII
 
-from peripherals.offsetdac import OffsetDAC
+from peripherals.offset_dac import OffsetDAC
 from peripherals.adc import ADCLVDSReceiver
 
 from litescope import LiteScopeAnalyzer
