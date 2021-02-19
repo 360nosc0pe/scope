@@ -1,9 +1,8 @@
-#!/usr/bin/env python3
-
 #
-# This file is part of LiteX-Boards.
+# This file is part of 360nosc0pe/scope project.
 #
-# Copyright (c) 2020 Florent Kermarrec <florent@enjoy-digital.fr>
+# Copyright (c) 2021 Felix Domke <tmbinc@elitedvb.net>
+# Copyright (c) 2021 Florent Kermarrec <florent@enjoy-digital.fr>
 # SPDX-License-Identifier: BSD-2-Clause
 
 from litex.build.generic_platform import *

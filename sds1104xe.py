@@ -1,22 +1,11 @@
 #!/usr/bin/env python3
 
 #
-# This file is part of LiteX-Boards.
+# This file is part of 360nosc0pe/scope project.
 #
-# Copyright (c) 2020 Florent Kermarrec <florent@enjoy-digital.fr>
+# Copyright (c) 2021 Felix Domke <tmbinc@elitedvb.net>
+# Copyright (c) 2021 Florent Kermarrec <florent@enjoy-digital.fr>
 # SPDX-License-Identifier: BSD-2-Clause
-
-# Build/Use ----------------------------------------------------------------------------------------
-# Build/Load bitstream:
-# ./sds1104xe.py --with-etherbone --uart-name=crossover --csr-csv=csr.csv --build --load
-#
-# Test Ethernet:
-# ping 192.168.1.50
-#
-# Test Console:
-# litex_server --udp
-# litex_term crossover
-# --------------------------------------------------------------------------------------------------
 
 import os
 import argparse
