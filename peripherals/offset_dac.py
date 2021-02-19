@@ -26,18 +26,18 @@ class OffsetDAC(Module, AutoCSR):
         self.comb += self.spi.connect(offsetdac_pads)
         self.comb += self.mux.connect(offsetmux_pads)
 
-        self._control = CSRStorage(32, name='control') # DAC PD control
-        self._clkdiv  = CSRStorage(32, name='clkdiv', reset=326) # roughly matches original timing
-        self._enable  = CSRStorage(32, name='enable', reset=1)
+        self._control = CSRStorage(32) # DAC PD control
+        self._clkdiv  = CSRStorage(32, reset=326) # roughly matches original timing
+        self._enable  = CSRStorage(32, reset=1)
 
-        self._v0 = CSRStorage(32, name='v0', reset = 0x8000) # unused
-        self._v1 = CSRStorage(32, name='v1', reset = 0x8000) # unused
-        self._v2 = CSRStorage(32, name='v2', reset = 0x8000) # unused
-        self._v3 = CSRStorage(32, name='v3', reset = 0x8000) # unused
-        self._v4 = CSRStorage(32, name='v4', reset = 0x8000) # CH1 offset
-        self._v5 = CSRStorage(32, name='v5', reset = 0x8000) # CH2 offset
-        self._v6 = CSRStorage(32, name='v6', reset = 0x8000) # CH3 offset
-        self._v7 = CSRStorage(32, name='v7', reset = 0x8000) # CH4 offset
+        self._v0 = CSRStorage(32, reset=0x8000) # unused
+        self._v1 = CSRStorage(32, reset=0x8000) # unused
+        self._v2 = CSRStorage(32, reset=0x8000) # unused
+        self._v3 = CSRStorage(32, reset=0x8000) # unused
+        self._v4 = CSRStorage(32, reset=0x8000) # CH1 offset
+        self._v5 = CSRStorage(32, reset=0x8000) # CH2 offset
+        self._v6 = CSRStorage(32, reset=0x8000) # CH3 offset
+        self._v7 = CSRStorage(32, reset=0x8000) # CH4 offset
 
         # data is transferred on falling edge of SCLK while nSYNC=0
         # data is MSB-first
