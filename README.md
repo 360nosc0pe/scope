@@ -1,10 +1,9 @@
 ```
-        ________   _______________                             _______                 
-        \_____  \ /  _____/\   _  \   ____   ____  ______ ____ \   _  \ ______   ____  
-          _(__  </   __  \ /  /_\  \ /    \ /  _ \/  ___// ___\/  /_\  \\____ \_/ __ \ 
-         /       \  |__\  \\  \_/   \   |  (  <_> )___ \\  \___\  \_/   \  |_> >  ___/ 
-        /______  /\_____  / \_____  /___|  /\____/____  >\___  >\_____  /   __/ \___  >
-               \/       \/        \/     \/           \/     \/       \/|__|        \/ 
+                              ____ ____ ___                    ___
+                             |_  // __// _ \___  ___  ___ ____/ _ \___  ___
+                            _/_ </ _ \/ // / _ \/ _ \(_-</ __/ // / _ \/ -_)
+                           /____/\___/\___/_//_/\___/___/\__/\___/ .__/\__/
+                                                                /_/
 
                                 Siglent SDS1x0xX-E FPGA bitstreams
                                      Powered by Migen & LiteX
@@ -40,7 +39,7 @@ $ sudo ./litex_setup.py init install
 ---------------------
 
 Follow the instructions [here](https://github.com/360nosc0pe/siglent_hardware/tree/master/sds1104xe) to
-prepare for JTAG boot mode. 
+prepare for JTAG boot mode.
 
 [> Build and Load the bitstream
 --------------------------------
