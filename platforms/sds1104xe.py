@@ -19,17 +19,17 @@ _io = [ # Documented by https://github.com/360nosc0pe project.
 
     # Led Frontpanel
     ("led_frontpanel", 0,
-        Subsignal("rclk", Pins("N22")),
-        Subsignal("clk",  Pins("R20")),
-        Subsignal("mosi", Pins("P22")),
-        Subsignal("oe",   Pins("R21")),
-        IOStandard("LVCMOS33"),
+        Subsignal("cs_n", Pins("N22")),  # RCLK
+        Subsignal("clk",  Pins("R20")),  # SCLK
+        Subsignal("mosi", Pins("P22")),  # SERDATA
+        Subsignal("oe",   Pins("R21")),  # OE
+        IOStandard("LVCMOS15"),
     ),
 
     # Button Frontpanel
     ("btn_frontpanel", 0,
         Subsignal("clk",  Pins("H18")),
-        Subsignal("clr",  Pins("G19")),
+        Subsignal("cs_n", Pins("G19")),
         Subsignal("miso", Pins("G17")),
         IOStandard("LVCMOS33")
     ),

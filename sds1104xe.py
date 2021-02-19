@@ -165,6 +165,21 @@ class ScopeSoC(SoCMini):
             csr_csv      = "analyzer.csv")
         self.add_csr("analyzer")
 
+        # Frontpanel LED
+        pads = self.platform.request("led_frontpanel")
+        pads.miso = Signal()
+        self.submodules.fp_led = SPIMaster(pads, 19, self.sys_clk_freq, 100e3)
+        self.add_csr("fp_led")
+
+        # enable shift register to drive LEDs (otherwise they are all-on)
+        self.comb += pads.oe.eq(0)
+
+        # Frontpanel buttons
+        pads = self.platform.request("btn_frontpanel")
+        pads.mosi = Signal()
+        self.submodules.fp_btn = SPIMaster(pads, 64, self.sys_clk_freq, 100e3)
+        self.add_csr("fp_btn")
+
 # Build --------------------------------------------------------------------------------------------
 
 def main():
