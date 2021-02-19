@@ -66,7 +66,7 @@ class ScopeSoC(SoCMini):
         # Scope ------------------------------------------------------------------------------------
 
         # Offset DAC/MUX
-        self.submodules.offset_dac = OffsetDAC(platform.request("offsetdac"), platform.request("offsetmux"))
+        self.submodules.offset_dac = OffsetDAC(platform.request("offset_dac"), platform.request("offset_mux"))
         self.add_csr("offset_dac")
 
         # SPI for

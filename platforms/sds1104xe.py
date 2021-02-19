@@ -66,13 +66,13 @@ _io = [ # Documented by https://github.com/360nosc0pe project.
     ),
 
     # Scope things
-    ("offsetmux", 0,
+    ("offset_mux", 0,
         Subsignal("S",       Pins("U14 Y18 AA18")),
         Subsignal("nE",      Pins("U19")),
         IOStandard("LVCMOS15"),
     ),
 
-    ("offsetdac", 0,
+    ("offset_dac", 0,
         Subsignal("SCLK",       Pins("H15")),
         Subsignal("DIN",        Pins("R15")),
         Subsignal("nSYNC",      Pins("J15")),

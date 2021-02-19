@@ -66,7 +66,7 @@ class Frontend:
         self.set_adc_reg(0, 0x2B, 00)
 
 
-class AdcIf:
+class ADCIf:
     def __init__(self):
         pass
 
@@ -130,7 +130,7 @@ clock.init()
 adc0 = ADC(0)
 adc0.data_mode()
 
-adcif = AdcIf()
+adcif = ADCIf()
 adcif.reset()
 adcif.reset()
 
