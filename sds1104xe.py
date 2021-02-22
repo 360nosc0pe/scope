@@ -57,16 +57,18 @@ scope_ios = [
 
     # ADC HAD1511 x2
     ("adc", 0,
-        Subsignal("d", Pins("AA12 AB12 AA11 AB11 W11 W10 U10 U9 " # D0..D3, each P/N
-                       "V10 V9 V8 W8 Y11 Y10 AB10 AB9 ")),
+        Subsignal("d", Pins(
+            "AA12 AB12 AA11 AB11 W11 W10  U10  U9", # D0..D3, each P/N
+            "V10    V9   V8   W8 Y11 Y10 AB10 AB9")),
         Subsignal("lclk", Pins("Y9 Y8")),
         Subsignal("fclk", Pins("AA9 AA8")),
         IOStandard("LVDS_25"),
         Misc("DIFF_TERM=TRUE"),
     ),
     ("adc", 1,
-        Subsignal("d", Pins("AB7 AB6 AB5 AB4 V7 W7 U6 U5 "
-                        "W6 W5 V5 V4 Y4 AA4 AB2 AB1")),
+        Subsignal("d", Pins(
+            "AB7 AB6 AB5 AB4 V7  W7  U6  U5",
+            "W6   W5  V5  V4 Y4 AA4 AB2 AB1")),
         Subsignal("lclk", Pins("Y6 Y5")),
         Subsignal("fclk", Pins("AA7 AA6")),
         IOStandard("LVDS_25"),
