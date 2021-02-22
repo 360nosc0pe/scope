@@ -30,6 +30,17 @@ video_timings = {
         "v_sync_offset" : 1,
         "v_sync_width"  : 4,
     },
+    "800x480@60Hz" : {
+        "pix_clk"       : 40e6,
+        "h_active"      : 800,
+        "h_blanking"    : 256,
+        "h_sync_offset" : 40,
+        "h_sync_width"  : 128,
+        "v_active"      : 480,
+        "v_blanking"    : 28,
+        "v_sync_offset" : 1,
+        "v_sync_width"  : 4,
+    },
 }
 
 # Video Timing Generator ---------------------------------------------------------------------------
@@ -162,6 +173,10 @@ class ColorBarsPattern(Module):
                     pix.eq(0),
                     bar.eq(bar + 1)
                 )
+            ),
+            If(vtg.source.last,
+                pix.eq(0),
+                bar.eq(0),
             )
         ]
 
