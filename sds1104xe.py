@@ -191,7 +191,7 @@ def main():
 
     soc = ScopeSoC(eth_ip=args.eth_ip)
 
-    builder = Builder(soc, csr_csv="csr.csv")
+    builder = Builder(soc, csr_csv="software/csr.csv")
     builder.build(run=args.build)
 
     if args.load:
