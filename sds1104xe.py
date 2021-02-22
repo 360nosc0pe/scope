@@ -23,6 +23,7 @@ from liteeth.phy.mii import LiteEthPHYMII
 
 from peripherals.offset_dac import OffsetDAC
 from peripherals.adc import ADCLVDSReceiver
+from peripherals.lcd import VideoTimingGenerator, ColorBarsPattern
 
 from litescope import LiteScopeAnalyzer
 
@@ -31,11 +32,13 @@ from litescope import LiteScopeAnalyzer
 class _CRG(Module):
     def __init__(self, platform, sys_clk_freq):
         self.clock_domains.cd_sys    = ClockDomain()
+        self.clock_domains.cd_lcd    = ClockDomain()
         self.clock_domains.cd_idelay = ClockDomain()
 
         self.submodules.pll = pll = S7PLL(speedgrade=-1)
         pll.register_clkin(ClockSignal("eth_tx"), 25e6)
         pll.create_clkout(self.cd_sys,    sys_clk_freq)
+        pll.create_clkout(self.cd_lcd,    40e6)
         pll.create_clkout(self.cd_idelay, 200e6)
 
         self.submodules.idelayctrl = S7IDELAYCTRL(self.cd_idelay)
@@ -165,20 +168,33 @@ class ScopeSoC(SoCMini):
             csr_csv      = "analyzer.csv")
         self.add_csr("analyzer")
 
-        # Frontpanel LED
+        # Frontpanel Leds --------------------------------------------------------------------------
         pads = self.platform.request("led_frontpanel")
         pads.miso = Signal()
         self.submodules.fp_led = SPIMaster(pads, 19, self.sys_clk_freq, 100e3)
         self.add_csr("fp_led")
+        self.comb += pads.oe.eq(0) # Enable shift register to drive LEDs (otherwise they are all-on)
 
-        # enable shift register to drive LEDs (otherwise they are all-on)
-        self.comb += pads.oe.eq(0)
-
-        # Frontpanel buttons
+        # Frontpanel Buttons -----------------------------------------------------------------------
         pads = self.platform.request("btn_frontpanel")
         pads.mosi = Signal()
         self.submodules.fp_btn = SPIMaster(pads, 64, self.sys_clk_freq, 100e3)
         self.add_csr("fp_btn")
+
+        # LCD --------------------------------------------------------------------------------------
+        lcd_pads = platform.request("lcd")
+        self.submodules.vtg = vtg = VideoTimingGenerator(clock_domain="lcd")
+        self.add_csr("vtg")
+        self.submodules.pattern = pattern = ColorBarsPattern(vtg, clock_domain="lcd")
+        self.comb += [
+            lcd_pads.clk.eq(ClockSignal("lcd")),
+            lcd_pads.hsync.eq(vtg.source.hsync),
+            lcd_pads.vsync.eq(vtg.source.vsync),
+            lcd_pads.r.eq(pattern.source.r),
+            lcd_pads.g.eq(pattern.source.g),
+            lcd_pads.b.eq(pattern.source.b),
+            pattern.source.ready.eq(vtg.source.de),
+        ]
 
 # Build --------------------------------------------------------------------------------------------
 

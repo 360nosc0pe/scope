@@ -45,7 +45,7 @@ video_timing_generator_layout = [
 ]
 
 class VideoTimingGenerator(Module, AutoCSR):
-    def __init__(self, default_video_timings="800x600@60Hz", clock_domain="vga"):
+    def __init__(self, default_video_timings="800x600@60Hz", clock_domain="lcd"):
         vt = video_timings[default_video_timings]
         # MMAP Control/Status Registers.
         self._enable      = CSRStorage(reset=1)
@@ -93,7 +93,7 @@ class VideoTimingGenerator(Module, AutoCSR):
         # Generate timings.
         hactive = Signal()
         vactive = Signal()
-        self.submodules.fsm = fsm = FSM(reset_state="IDLE")
+        self.submodules.fsm = fsm = ClockDomainsRenamer(clock_domain)(FSM(reset_state="IDLE"))
         fsm.act("IDLE",
             NextValue(hactive, 0),
             NextValue(vactive, 0),
@@ -142,7 +142,7 @@ class VideoTimingGenerator(Module, AutoCSR):
 
 class ColorBarsPattern(Module):
     """Color Bars Pattern"""
-    def __init__(self, vtg, clock_domain="vga"):
+    def __init__(self, vtg, clock_domain="lcd"):
         self.enable = Signal(reset=1)
         self.source = source = stream.Endpoint([("r", 8), ("g", 8), ("b", 8)])
 
