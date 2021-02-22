@@ -12,7 +12,9 @@ import argparse
 
 from migen import *
 
-from platforms import sds1104xe
+from litex.build.generic_platform import *
+
+from litex_boards.platforms import sds1104xe
 
 from litex.soc.cores.clock import *
 from litex.soc.integration.soc_core import *
@@ -26,6 +28,51 @@ from peripherals.adc import ADCLVDSReceiver
 from peripherals.lcd import VideoTimingGenerator, ColorBarsPattern
 
 from litescope import LiteScopeAnalyzer
+
+# Scope IOs ----------------------------------------------------------------------------------------
+
+scope_ios = [
+    # Offset Mux
+    ("offset_mux", 0,
+        Subsignal("S",  Pins("U14 Y18 AA18")),
+        Subsignal("nE", Pins("U19")),
+        IOStandard("LVCMOS15"),
+    ),
+
+    # Offset DAC
+    ("offset_dac", 0,
+        Subsignal("SCLK",  Pins("H15")),
+        Subsignal("DIN",   Pins("R15")),
+        Subsignal("nSYNC", Pins("J15")),
+        IOStandard("LVCMOS15"),
+    ),
+
+    # SPI
+    ("spi", 0,
+        Subsignal("clk",  Pins("K15")),
+        Subsignal("mosi", Pins("J16")),
+        Subsignal("cs_n", Pins("J17 L16 L17 M17 N17 N18 M15 K20")), # PLL, ADC0, ADC1, FE, VGA1, VGA2, VGA3, VGA4
+        IOStandard("LVCMOS15"),
+    ),
+
+    # ADC HAD1511 x2
+    ("adc", 0,
+        Subsignal("d", Pins("AA12 AB12 AA11 AB11 W11 W10 U10 U9 " # D0..D3, each P/N
+                       "V10 V9 V8 W8 Y11 Y10 AB10 AB9 ")),
+        Subsignal("lclk", Pins("Y9 Y8")),
+        Subsignal("fclk", Pins("AA9 AA8")),
+        IOStandard("LVDS_25"),
+        Misc("DIFF_TERM=TRUE"),
+    ),
+    ("adc", 1,
+        Subsignal("d", Pins("AB7 AB6 AB5 AB4 V7 W7 U6 U5 "
+                        "W6 W5 V5 V4 Y4 AA4 AB2 AB1")),
+        Subsignal("lclk", Pins("Y6 Y5")),
+        Subsignal("fclk", Pins("AA7 AA6")),
+        IOStandard("LVDS_25"),
+        Misc("DIFF_TERM=TRUE"),
+    ),
+]
 
 # CRG ----------------------------------------------------------------------------------------------
 
@@ -49,6 +96,7 @@ class ScopeSoC(SoCMini):
     def __init__(self, sys_clk_freq=int(100e6), eth_ip="192.168.1.50"):
         # Platform ---------------------------------------------------------------------------------
         platform = sds1104xe.Platform()
+        platform.add_extension(scope_ios)
 
         # SoCMini ----------------------------------------------------------------------------------
         SoCMini.__init__(self, platform, sys_clk_freq,
