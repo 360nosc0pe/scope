@@ -113,14 +113,12 @@ class ScopeSoC(SoCMini):
         self.submodules.ethphy = LiteEthPHYMII(
             clock_pads = self.platform.request("eth_clocks"),
             pads       = self.platform.request("eth"))
-        self.add_csr("ethphy")
         self.add_etherbone(phy=self.ethphy, ip_address=eth_ip)
 
         # Scope ------------------------------------------------------------------------------------
 
         # Offset DAC/MUX
         self.submodules.offset_dac = OffsetDAC(platform.request("offset_dac"), platform.request("offset_mux"))
-        self.add_csr("offset_dac")
 
         # SPI for
         #  - CS0: PLL
@@ -174,7 +172,6 @@ class ScopeSoC(SoCMini):
         pads = self.platform.request("spi")
         pads.miso = Signal()
         self.submodules.spi = SPIMaster(pads, 6*8, self.sys_clk_freq, 8e6)
-        self.add_csr("spi")
 
         # The ADC LVDS Interface
         LVDS_ADC = [
@@ -187,11 +184,8 @@ class ScopeSoC(SoCMini):
         ]
 
         self.submodules.adcif0 = ADCLVDSReceiver(self.platform.request("adc", 0), 0)
-        self.add_csr("adcif0")
 
         self.submodules.adcif1 = ADCLVDSReceiver(self.platform.request("adc", 1), 1)
-        self.add_csr("adcif1")
-
 
         # Litescope
 
@@ -216,25 +210,21 @@ class ScopeSoC(SoCMini):
             depth        = 1024,
             clock_domain = "sys",
             csr_csv      = "analyzer.csv")
-        self.add_csr("analyzer")
 
         # Frontpanel Leds --------------------------------------------------------------------------
         pads = self.platform.request("led_frontpanel")
         pads.miso = Signal()
         self.submodules.fp_led = SPIMaster(pads, 19, self.sys_clk_freq, 100e3)
-        self.add_csr("fp_led")
         self.comb += pads.oe.eq(0) # Enable shift register to drive LEDs (otherwise they are all-on)
 
         # Frontpanel Buttons -----------------------------------------------------------------------
         pads = self.platform.request("btn_frontpanel")
         pads.mosi = Signal()
         self.submodules.fp_btn = SPIMaster(pads, 64, self.sys_clk_freq, 100e3)
-        self.add_csr("fp_btn")
 
         # LCD --------------------------------------------------------------------------------------
         lcd_pads = platform.request("lcd")
         self.submodules.vtg = vtg = VideoTimingGenerator(clock_domain="lcd")
-        self.add_csr("vtg")
         self.submodules.pattern = pattern = ColorBarsPattern(vtg, clock_domain="lcd")
         self.comb += [
             lcd_pads.clk.eq(ClockSignal("lcd")),
