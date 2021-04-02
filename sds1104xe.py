@@ -20,12 +20,12 @@ from litex.soc.cores.clock import *
 from litex.soc.integration.soc_core import *
 from litex.soc.integration.builder import *
 from litex.soc.cores.spi import SPIMaster
+from litex.soc.cores.video import VideoDVIPHY
 
 from liteeth.phy.mii import LiteEthPHYMII
 
 from peripherals.offset_dac import OffsetDAC
 from peripherals.adc import ADCLVDSReceiver
-from peripherals.lcd import VideoTimingGenerator, ColorBarsPattern
 
 from litescope import LiteScopeAnalyzer
 
@@ -223,18 +223,10 @@ class ScopeSoC(SoCMini):
         self.submodules.fp_btn = SPIMaster(pads, 64, self.sys_clk_freq, 100e3)
 
         # LCD --------------------------------------------------------------------------------------
-        lcd_pads = platform.request("lcd")
-        self.submodules.vtg = vtg = VideoTimingGenerator(clock_domain="lcd")
-        self.submodules.pattern = pattern = ColorBarsPattern(vtg, clock_domain="lcd")
-        self.comb += [
-            lcd_pads.clk.eq(ClockSignal("lcd")),
-            lcd_pads.hsync.eq(vtg.source.hsync),
-            lcd_pads.vsync.eq(vtg.source.vsync),
-            lcd_pads.r.eq(pattern.source.r),
-            lcd_pads.g.eq(pattern.source.g),
-            lcd_pads.b.eq(pattern.source.b),
-            pattern.source.ready.eq(vtg.source.de),
-        ]
+        # FIXME: Test/Define 800x480 timings.
+        self.submodules.lcd_phy = VideoDVIPHY(platform.request("lcd"), clock_domain="lcd")
+        self.add_video_colorbars(phy=self.lcd_phy, timings="800x600@60Hz", clock_domain="lcd")
+        #self.add_video_terminal(phy=self.lcd_phy, timings="800x600@60Hz", clock_domain="lcd")
 
 # Build --------------------------------------------------------------------------------------------
 
