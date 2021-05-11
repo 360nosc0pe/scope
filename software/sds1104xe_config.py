@@ -18,15 +18,15 @@ def set_leds(data):
     wb.regs.leds_value.write(data)
 
 def read_buttons():
-    wb.regs.fp_btn_cs.write(1)
-    wb.regs.fp_btn_control.write(0x01 | (64<<8))
-    while wb.regs.fp_btn_status.read() == 0:
-        pass
-    return wb.regs.fp_btn_miso.read() ^ ((1<<64) - 1)
+    return wb.regs.btns_value.read()
 
+print("Test Leds...")
 for i in range(19):
     set_leds(1<<i)
     time.sleep(.05)
+
+print("Test Buttons...")
+print(f"0x{read_buttons():08x}")
 
 class Clock:
     def __init__(self):

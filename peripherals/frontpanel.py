@@ -54,3 +54,25 @@ class FrontpanelLeds(Module, AutoCSR):
         self.sync += If(spi.done, spi.mosi.eq(self.value.storage)) # Update SPI MOSI when Xfer done.
         self.comb += spi.length.eq(19)
         self.sync += spi.start.eq(spi.done) # Continous SPI Xfers.
+
+# Frontpanel Buttons -------------------------------------------------------------------------------
+
+class FrontpanelButtons(Module, AutoCSR):
+    def __init__(self, pads, sys_clk_freq):
+        self.value = CSRStatus(64)
+
+        # # #
+
+        # SPI Master.
+        pads.mosi = Signal() # Add fake MOSI pad.
+        self.submodules.spi = spi = SPIMaster(pads,
+            data_width   = 64,
+            sys_clk_freq = sys_clk_freq,
+            spi_clk_freq = 100e3,
+            with_csr     = False
+        )
+
+        # SPI Control.
+        self.sync += If(spi.done, self.value.status.eq(spi.miso)) # Update Value when SPI Xfer done.
+        self.comb += spi.length.eq(64)
+        self.sync += spi.start.eq(spi.done) # Continous SPI Xfers.

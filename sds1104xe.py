@@ -27,7 +27,7 @@ from liteeth.phy.mii import LiteEthPHYMII
 from peripherals.offset_dac import OffsetDAC
 from peripherals.adc import ADCLVDSReceiver
 
-from peripherals.frontpanel import FrontpanelLeds
+from peripherals.frontpanel import FrontpanelLeds, FrontpanelButtons
 
 from litescope import LiteScopeAnalyzer
 
@@ -121,9 +121,7 @@ class ScopeSoC(SoCMini):
         self.submodules.leds = FrontpanelLeds(platform.request("led_frontpanel"), sys_clk_freq)
 
         # Frontpanel Buttons -----------------------------------------------------------------------
-        pads = self.platform.request("btn_frontpanel")
-        pads.mosi = Signal()
-        self.submodules.fp_btn = SPIMaster(pads, 64, self.sys_clk_freq, 100e3)
+        self.submodules.btns = FrontpanelButtons(platform.request("btn_frontpanel"), sys_clk_freq)
 
         # LCD --------------------------------------------------------------------------------------
         video_timings = ("800x480@60Hz", {
