@@ -12,6 +12,26 @@ from litex.soc.cores.spi import SPIMaster
 
 # Frontpanel Leds ----------------------------------------------------------------------------------
 
+FP_LED_INTENSITY_ADJUST = (1 <<  0)
+FP_LED_CHANNEL_1        = (1 <<  1)
+FP_LED_CHANNEL_2        = (1 <<  2)
+FP_LED_CHANNEL_3        = (1 <<  3)
+FP_LED_CHANNEL_4        = (1 <<  4)
+FP_LED_DIGITAL          = (1 <<  5)
+FP_LED_CURSORS          = (1 <<  6)
+FP_LED_MEASURE          = (1 <<  7)
+FP_LED_MATH             = (1 <<  8)
+FP_LED_REF              = (1 <<  9)
+FP_LED_ROLL             = (1 << 10)
+FP_LED_SEARCH           = (1 << 11)
+FP_LED_DECODE           = (1 << 12)
+FP_LED_HISTORY          = (1 << 13)
+FP_LED_AUTO             = (1 << 14)
+FP_LED_NORMAL           = (1 << 15)
+FP_LED_SINGLE           = (1 << 16)
+FP_LED_RUN_STOP_GREEN   = (1 << 17)
+FP_LED_RUN_STOP_RED     = (1 << 18)
+
 class FrontpanelLeds(Module, AutoCSR):
     def __init__(self, pads, sys_clk_freq):
         self.value = CSRStorage(19)
