@@ -115,6 +115,33 @@ class ScopeSoC(SoCMini):
             pads       = self.platform.request("eth"))
         self.add_etherbone(phy=self.ethphy, ip_address=eth_ip)
 
+        # Frontpanel Leds --------------------------------------------------------------------------
+        pads = self.platform.request("led_frontpanel")
+        pads.miso = Signal()
+        self.submodules.fp_led = SPIMaster(pads, 19, self.sys_clk_freq, 100e3)
+        self.comb += pads.oe.eq(0) # Enable shift register to drive LEDs (otherwise they are all-on)
+
+        # Frontpanel Buttons -----------------------------------------------------------------------
+        pads = self.platform.request("btn_frontpanel")
+        pads.mosi = Signal()
+        self.submodules.fp_btn = SPIMaster(pads, 64, self.sys_clk_freq, 100e3)
+
+        # LCD --------------------------------------------------------------------------------------
+        video_timings = ("800x480@60Hz", {
+            "pix_clk"       : 33.3e6,
+            "h_active"      : 800,
+            "h_blanking"    : 256,
+            "h_sync_offset" : 210,
+            "h_sync_width"  : 1,
+            "v_active"      : 480,
+            "v_blanking"    : 45,
+            "v_sync_offset" : 22,
+            "v_sync_width"  : 1,
+        })
+        self.submodules.lcdphy = VideoVGAPHY(platform.request("lcd"), clock_domain="lcd")
+        self.add_video_colorbars(phy=self.lcdphy, timings=video_timings, clock_domain="lcd")
+        #self.add_video_terminal(phy=self.videophy, timings=video_timings, clock_domain="lcd")
+
         # Scope ------------------------------------------------------------------------------------
 
         # Offset DAC/MUX
@@ -210,33 +237,6 @@ class ScopeSoC(SoCMini):
             depth        = 1024,
             clock_domain = "sys",
             csr_csv      = "analyzer.csv")
-
-        # Frontpanel Leds --------------------------------------------------------------------------
-        pads = self.platform.request("led_frontpanel")
-        pads.miso = Signal()
-        self.submodules.fp_led = SPIMaster(pads, 19, self.sys_clk_freq, 100e3)
-        self.comb += pads.oe.eq(0) # Enable shift register to drive LEDs (otherwise they are all-on)
-
-        # Frontpanel Buttons -----------------------------------------------------------------------
-        pads = self.platform.request("btn_frontpanel")
-        pads.mosi = Signal()
-        self.submodules.fp_btn = SPIMaster(pads, 64, self.sys_clk_freq, 100e3)
-
-        # LCD --------------------------------------------------------------------------------------
-        video_timings = ("800x480@60Hz", {
-            "pix_clk"       : 33.3e6,
-            "h_active"      : 800,
-            "h_blanking"    : 256,
-            "h_sync_offset" : 210,
-            "h_sync_width"  : 1,
-            "v_active"      : 480,
-            "v_blanking"    : 45,
-            "v_sync_offset" : 22,
-            "v_sync_width"  : 1,
-        })
-        self.submodules.lcdphy = VideoVGAPHY(platform.request("lcd"), clock_domain="lcd")
-        self.add_video_colorbars(phy=self.lcdphy, timings=video_timings, clock_domain="lcd")
-        #self.add_video_terminal(phy=self.videophy, timings=video_timings, clock_domain="lcd")
 
 # Build --------------------------------------------------------------------------------------------
 
