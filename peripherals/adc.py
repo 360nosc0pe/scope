@@ -1,3 +1,9 @@
+#
+# This file is part of 360nosc0pe/scope project.
+#
+# Copyright (c) 2020-2021 Felix Domke <tmbinc@elitedvb.net>
+# SPDX-License-Identifier: BSD-2-Clause
+
 from migen import *
 
 from migen.genlib.fifo import AsyncFIFOBuffered
