@@ -20,7 +20,7 @@ from litex.soc.cores.clock import *
 from litex.soc.integration.soc_core import *
 from litex.soc.integration.builder import *
 from litex.soc.cores.spi import SPIMaster
-from litex.soc.cores.video import VideoDVIPHY
+from litex.soc.cores.video import VideoVGAPHY
 
 from liteeth.phy.mii import LiteEthPHYMII
 
@@ -87,7 +87,7 @@ class _CRG(Module):
         self.submodules.pll = pll = S7PLL(speedgrade=-1)
         pll.register_clkin(ClockSignal("eth_tx"), 25e6)
         pll.create_clkout(self.cd_sys,    sys_clk_freq)
-        pll.create_clkout(self.cd_lcd,    40e6)
+        pll.create_clkout(self.cd_lcd,    33.3e6)
         pll.create_clkout(self.cd_idelay, 200e6)
 
         self.submodules.idelayctrl = S7IDELAYCTRL(self.cd_idelay)
@@ -223,10 +223,20 @@ class ScopeSoC(SoCMini):
         self.submodules.fp_btn = SPIMaster(pads, 64, self.sys_clk_freq, 100e3)
 
         # LCD --------------------------------------------------------------------------------------
-        # FIXME: Test/Define 800x480 timings.
-        self.submodules.lcd_phy = VideoDVIPHY(platform.request("lcd"), clock_domain="lcd")
-        self.add_video_colorbars(phy=self.lcd_phy, timings="800x600@60Hz", clock_domain="lcd")
-        #self.add_video_terminal(phy=self.lcd_phy, timings="800x600@60Hz", clock_domain="lcd")
+        video_timings = ("800x480@60Hz", {
+            "pix_clk"       : 33.3e6,
+            "h_active"      : 800,
+            "h_blanking"    : 256,
+            "h_sync_offset" : 210,
+            "h_sync_width"  : 1,
+            "v_active"      : 480,
+            "v_blanking"    : 45,
+            "v_sync_offset" : 22,
+            "v_sync_width"  : 1,
+        })
+        self.submodules.lcdphy = VideoVGAPHY(platform.request("lcd"), clock_domain="lcd")
+        self.add_video_colorbars(phy=self.lcdphy, timings=video_timings, clock_domain="lcd")
+        #self.add_video_terminal(phy=self.videophy, timings=video_timings, clock_domain="lcd")
 
 # Build --------------------------------------------------------------------------------------------
 
