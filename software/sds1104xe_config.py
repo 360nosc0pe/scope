@@ -15,9 +15,7 @@ def spi_write(cs, data):
     wb.regs.spi_control.write(0x01 | ((len(data) * 8) << 8))
 
 def set_leds(data):
-    wb.regs.fp_led_cs.write(1)
-    wb.regs.fp_led_mosi.write(data)
-    wb.regs.fp_led_control.write(0x01 | (19 << 8))
+    wb.regs.leds_value.write(data)
 
 def read_buttons():
     wb.regs.fp_btn_cs.write(1)

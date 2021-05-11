@@ -27,6 +27,8 @@ from liteeth.phy.mii import LiteEthPHYMII
 from peripherals.offset_dac import OffsetDAC
 from peripherals.adc import ADCLVDSReceiver
 
+from peripherals.frontpanel import FrontpanelLeds
+
 from litescope import LiteScopeAnalyzer
 
 # Scope IOs ----------------------------------------------------------------------------------------
@@ -116,10 +118,7 @@ class ScopeSoC(SoCMini):
         self.add_etherbone(phy=self.ethphy, ip_address=eth_ip)
 
         # Frontpanel Leds --------------------------------------------------------------------------
-        pads = self.platform.request("led_frontpanel")
-        pads.miso = Signal()
-        self.submodules.fp_led = SPIMaster(pads, 19, self.sys_clk_freq, 100e3)
-        self.comb += pads.oe.eq(0) # Enable shift register to drive LEDs (otherwise they are all-on)
+        self.submodules.leds = FrontpanelLeds(platform.request("led_frontpanel"), sys_clk_freq)
 
         # Frontpanel Buttons -----------------------------------------------------------------------
         pads = self.platform.request("btn_frontpanel")
