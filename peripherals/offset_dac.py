@@ -24,13 +24,16 @@ MUX = [
 # Offset DAC ---------------------------------------------------------------------------------------
 
 class OffsetDAC(Module, AutoCSR):
-    def __init__(self, offsetdac_pads, offsetmux_pads):
-        self._status = CSRStatus(32, name='status', reset=0x0ffdac)
+    def __init__(self, offsetdac_pads=None, offsetmux_pads=None):
+        self._status = CSRStatus(32, reset=0x0ffdac)
         self.spi     = Record(SPI)
         self.mux     = Record(MUX)
 
-        self.comb += self.spi.connect(offsetdac_pads)
-        self.comb += self.mux.connect(offsetmux_pads)
+        if offsetdac_pads is not None:
+            self.comb += self.spi.connect(offsetdac_pads)
+
+        if offsetmux_pads is not None:
+            self.comb += self.mux.connect(offsetmux_pads)
 
         self._control = CSRStorage(32) # DAC PD control
         self._clkdiv  = CSRStorage(32, reset=326) # roughly matches original timing
@@ -169,6 +172,6 @@ if __name__ == '__main__':
         for _ in range(25 * 8 * 1000):
             yield
 
-    print("Running simulation...")
-    t = OffsetDac()
-    run_simulation(t, testbench_offsetdac(t), vcd_name='offsetdac.vcd')
+    print("Running OffsetDAC simulation...")
+    t = OffsetDAC()
+    run_simulation(t, testbench_offsetdac(t), vcd_name="offset_dac.vcd")
