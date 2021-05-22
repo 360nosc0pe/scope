@@ -11,6 +11,7 @@
 
 import sys
 import time
+import datetime
 import argparse
 sys.path.append("..")
 
@@ -26,13 +27,13 @@ def leds_test(port):
 
     leds_value = 0
 
-    print(">> Leds ON...")
+    print("Leds ON  >>...")
     for i in range(19):
         leds_value |= (1<<i)
         bus.regs.leds_value.write(leds_value)
         time.sleep(0.05)
 
-    print(">> Leds OFF.")
+    print("Leds OFF >>...")
     for i in range(19):
         leds_value &= ~(1<<i)
         bus.regs.leds_value.write(leds_value)
@@ -82,13 +83,49 @@ def buttons_test(port):
 
     bus.close()
 
+# Video Terminal Test ------------------------------------------------------------------------------
+
+def video_terminal_test(port):
+    bus = RemoteClient(port=port)
+    bus.open()
+
+    def video_terminal_print(bus, s):
+        # Write to SoC's UART.
+        for c in s:
+            # Flush SoC's Xover UART.
+            while not bus.regs.uart_xover_rxempty.read():
+                bus.regs.uart_xover_rxtx.read()
+            bus.regs.uart_rxtx.write(ord(c))
+            time.sleep(0.0001)
+
+    banner = """
+   ____ ____ ___                    ___
+  |_  // __// _ \\___  ___  ___ ____/ _ \\___  ___
+ _/_ </ _ \\/ // / _ \\/ _ \\(_-</ __/ // / _ \\/ -_)
+/____/\\___/\\___/_//_/\\___/___/\\__/\\___/ .__/\\__/
+                                     /_/
+    \r"""
+    video_terminal_print(bus, banner)
+
+    msg = "Hello World from ScopeSoC on Siglent SDS1104X-E :)\n\r"
+    video_terminal_print(bus, msg)
+
+    while True:
+        msg = datetime.datetime.fromtimestamp(time.time()).strftime("%Y-%m-%d %H:%M:%S")
+        msg += "\n\r"
+        video_terminal_print(bus, msg)
+        time.sleep(0.5)
+
+    bus.close()
+
 # Run ----------------------------------------------------------------------------------------------
 
 def main():
     parser = argparse.ArgumentParser(description="Frontpanel test utility")
-    parser.add_argument("--port",    default="1234",      help="Host bind port")
-    parser.add_argument("--leds",    action="store_true", help="Test leds")
-    parser.add_argument("--buttons", action="store_true", help="Test buttons")
+    parser.add_argument("--port",     default="1234",      help="Host bind port")
+    parser.add_argument("--leds",     action="store_true", help="Test leds")
+    parser.add_argument("--buttons",  action="store_true", help="Test buttons")
+    parser.add_argument("--terminal", action="store_true", help="Test Video Terminal")
     args = parser.parse_args()
 
     port = int(args.port, 0)
@@ -98,6 +135,9 @@ def main():
 
     if args.buttons:
         buttons_test(port=port)
+
+    if args.terminal:
+        video_terminal_test(port=port)
 
 if __name__ == "__main__":
     main()
