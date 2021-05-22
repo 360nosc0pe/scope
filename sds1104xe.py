@@ -233,9 +233,9 @@ class ScopeSoC(SoCMini):
         self.comb += self.adcif1.d_rst.eq(self.crg.cd_sys.rst)
 
         self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals,
-            depth        = 1024,
+            depth        = 8192,
             clock_domain = "sys",
-            csr_csv      = "analyzer.csv")
+            csr_csv      = "software/analyzer.csv")
 
 # Build --------------------------------------------------------------------------------------------
 
