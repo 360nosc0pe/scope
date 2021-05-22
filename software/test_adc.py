@@ -23,9 +23,6 @@ def spi_write(cs, data):
     wb.regs.spi_control.write(0x01 | ((len(data) * 8) << 8))
 
 class Clock:
-    def __init__(self):
-        pass
-
     def init(self):
         self.set(b"\x40\x31\x20") # CONTROL
         self.set(b"\x04\xE1\x42") # NCOUNTER
@@ -35,18 +32,11 @@ class Clock:
         spi_write(0, x)
 
 class OffsetDAC:
-    def __init__(self):
-        pass
+    def init(self):
+        wb.regs.offset_dac_control.write(1)
 
     def set_ch(self, ch, val):
-        if ch == 0:
-            wb.regs.offset_dac_v4.write(val)
-        elif ch == 1:
-            wb.regs.offset_dac_v5.write(val)
-        elif ch == 2:
-            wb.regs.offset_dac_v6.write(val)
-        elif ch == 3:
-            wb.regs.offset_dac_v7.write(val)
+        getattr(wb.regs, f"offset_dac_ch{ch+1}").write(val)
 
 # frontend init
 class Frontend:
@@ -144,7 +134,7 @@ adcif.reset()
 
 offsetdac = OffsetDAC()
 frontend = Frontend(adc0, None, offsetdac)
-frontend.set_ch1_100mv()
+frontend.set_ch1_1v()
 
 #adc0.ramp()
 #adc0.dual(0xfeed,0xbabe)
@@ -154,6 +144,7 @@ frontend.set_ch1_100mv()
 print("ADC0", hex(wb.regs.adcif0_status.read()))
 print("ADC1", hex(wb.regs.adcif1_status.read()))
 
+offsetdac.init()
 offsetdac.set_ch(0, 0x2600)
 
 wb.close()

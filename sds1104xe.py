@@ -34,18 +34,15 @@ from litescope import LiteScopeAnalyzer
 # Scope IOs ----------------------------------------------------------------------------------------
 
 scope_ios = [
-    # Offset Mux
-    ("offset_mux", 0,
-        Subsignal("S",  Pins("U14 Y18 AA18")),
-        Subsignal("nE", Pins("U19")),
-        IOStandard("LVCMOS15"),
-    ),
-
     # Offset DAC
     ("offset_dac", 0,
-        Subsignal("SCLK",  Pins("H15")),
-        Subsignal("DIN",   Pins("R15")),
-        Subsignal("nSYNC", Pins("J15")),
+        # DAC.
+        Subsignal("sclk",   Pins("H15")),
+        Subsignal("din",    Pins("R15")),
+        Subsignal("sync_n", Pins("J15")),
+        # Mux.
+        Subsignal("s",   Pins("U14 Y18 AA18")),
+        Subsignal("e_n", Pins("U19")),
         IOStandard("LVCMOS15"),
     ),
 
@@ -57,7 +54,7 @@ scope_ios = [
         IOStandard("LVCMOS15"),
     ),
 
-    # ADC HAD1511 x2
+    # ADC HAD1511 X2
     ("adc", 0,
         Subsignal("d", Pins(
             "AA12 AB12 AA11 AB11 W11 W10  U10  U9", # D0..D3, each P/N
@@ -144,7 +141,10 @@ class ScopeSoC(SoCMini):
         # Scope ------------------------------------------------------------------------------------
 
         # Offset DAC/MUX
-        self.submodules.offset_dac = OffsetDAC(platform.request("offset_dac"), platform.request("offset_mux"))
+        self.submodules.offset_dac = OffsetDAC(platform.request("offset_dac"),
+            sys_clk_freq = sys_clk_freq,
+            spi_clk_freq = int(250e3)
+        )
 
         # SPI for
         #  - CS0: PLL

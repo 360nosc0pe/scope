@@ -2,169 +2,167 @@
 # This file is part of 360nosc0pe/scope project.
 #
 # Copyright (c) 2020-2021 Felix Domke <tmbinc@elitedvb.net>
+# Copyright (c) 2021 Florent Kermarrec <florent@enjoy-digital.fr>
 # SPDX-License-Identifier: BSD-2-Clause
 
 from migen import *
+from migen.genlib.misc import WaitTimer
 
 from litex.soc.interconnect.csr import *
 
+from litex.soc.cores.spi import SPIMaster
+
+# Offset DAC/Mux Description -----------------------------------------------------------------------
+#
+#                                       74HC4051
+#                                       ┌───────┐
+#            ┌─────────┐   ┌────────┐   │       ├──► Y0  (Unused)
+#            │         │   │        │   │       ├──► Y1  (Unused)
+#            │  FPGA   ├──►│  DAC   ├──►│Z      │
+#            │         │SPI│        │ V │       ├──► Y2  (Unused)
+#            └──┬─────┬┘   └────────┘   │   M   ├──► Y3  (Unused)
+#               │     │                 │   U   │
+#               │     └────────────────►│S  X   ├──► Y4  Reference offset for CH1's VGA.
+#               │                       │       ├──► Y5  Reference offset for CH2's VGA.
+#               └──────────────────────►│/E     │
+#                                       │       ├──► Y6  Reference offset for CH3's VGA.
+#                                       │       ├──► Y7  Reference offset for CH4's VGA.
+#                                       └───────┘
+#
+# Global
+# ------
+#   To generate the reference offsets for the 4 channels, a single DAC is used and connected to a
+#   74HC4051 (8-channel analog multiplexer/demultiplexer).
+#
+#   The DAC output is connected to the Z pin of the 74HC4051, is connnected to the output selected
+#   by S if /E is low, otherwise the output holds the previous connected value.
+#
+# DAC
+# ---
+#   The data is transferred (MSB-first) on falling edge of SCLK while nSYNC is low and the data is
+#   updated on the 24th bit with the following protocol:
+#     | 6 bits | 2 bits  | 16 bits |
+#     | XXXXXX | PD1,PD0 |  data   |
+#   Where PD bits define DAC mode:
+#       0 - normal
+#       1 - 1k to GND
+#       2 - 100k to GND
+#       3 - Hi-Z
+#
+# Original behaviour:
+# -------------------
+#   DAC SCLK is constantly running, /E is deactivated during the DAC transition for 2 cycles and
+#   selected channel is also updated during this transition.
+#
+# Original timings:
+# -----------------
+# SCLK freq:       250KHz.
+# /E high pulse:   ~8.1us.
+# Repetition rate: 9.8kHz => 1/25.5 of SPI SCLK freq.
+
 # Layouts ------------------------------------------------------------------------------------------
 
-SPI = [
-    ("SCLK",  1, DIR_M_TO_S),
-    ("DIN",   1, DIR_M_TO_S),
-    ("nSYNC", 1, DIR_M_TO_S)
-]
-
-MUX = [
-    ("nE", 1, DIR_M_TO_S),
-    ("S",  3, DIR_M_TO_S),
+offset_dac_layout = [
+    # DAC.
+    ("sclk",   1),
+    ("din",    1),
+    ("sync_n", 1),
+    # Mux.
+    ("s",   3),
+    ("e_n", 1),
 ]
 
 # Offset DAC ---------------------------------------------------------------------------------------
 
 class OffsetDAC(Module, AutoCSR):
-    def __init__(self, offsetdac_pads=None, offsetmux_pads=None):
-        self._status = CSRStatus(32, reset=0x0ffdac)
-        self.spi     = Record(SPI)
-        self.mux     = Record(MUX)
+    def __init__(self, pads=None, sys_clk_freq=int(100e6), spi_clk_freq=int(250e3), default_enable=0):
+        pads = pads if pads is not None else Record(offset_dac_layout)
+        pads.e_n.reset = 1 # Disable Mux update by default.
+        # Control/Status.
+        self._control = CSRStorage(fields=[
+            CSRField("enable", offset=0, size=1, reset=default_enable, description="Enable OffsetDAC operation."),
+            CSRField("mode",   offset=4, size=2, description="DAC mode", values=[
+                ("``0b00``", "Normal operation."),
+                ("``0b01``", "1k to GND."),
+                ("``0b10``", "100k to GND."),
+                ("``0b11``", "Hi-Z."),
+            ]),
+        ])
+        self._status  = CSRStatus() # Unused
 
-        if offsetdac_pads is not None:
-            self.comb += self.spi.connect(offsetdac_pads)
+        # Channel Offsets.
+        self._ch1 = CSRStorage(16, reset=0x8000)
+        self._ch2 = CSRStorage(16, reset=0x8000)
+        self._ch3 = CSRStorage(16, reset=0x8000)
+        self._ch4 = CSRStorage(16, reset=0x8000)
 
-        if offsetmux_pads is not None:
-            self.comb += self.mux.connect(offsetmux_pads)
+        # # #
 
-        self._control = CSRStorage(32) # DAC PD control
-        self._clkdiv  = CSRStorage(32, reset=326) # roughly matches original timing
-        self._enable  = CSRStorage(32, reset=1)
-
-        self._v0 = CSRStorage(32, reset=0x8000) # unused
-        self._v1 = CSRStorage(32, reset=0x8000) # unused
-        self._v2 = CSRStorage(32, reset=0x8000) # unused
-        self._v3 = CSRStorage(32, reset=0x8000) # unused
-        self._v4 = CSRStorage(32, reset=0x8000) # CH1 offset
-        self._v5 = CSRStorage(32, reset=0x8000) # CH2 offset
-        self._v6 = CSRStorage(32, reset=0x8000) # CH3 offset
-        self._v7 = CSRStorage(32, reset=0x8000) # CH4 offset
-
-        # data is transferred on falling edge of SCLK while nSYNC=0
-        # data is MSB-first
-        # on 24th bit, data is updated.
-        # | 6 bits | 2 bits  | 16 bits |
-        # | XXXXXX | PD1,PD0 | data    |
-        # PD: 0 - normal
-        #     1 - 1k to GND
-        #     2 - 100k to GND
-        #     3 - Hi-Z
-
-        # MUX sequence:
-        # A single DAC is used and connected to a 74HC4051 (8-channel
-        # analog multiplexer/demultiplexer)
-        # The DAC output is connected to the MUX "Z" pin
-        # Z is connnected to the output selected by S if
-        # /E is low, otherwise left unconnected.
-
-        # TIMING:
-        # /E high pulse is ~8.1us
-        # SPI clock rate: 250kHz
-        # repetition rate: 9.8kHz => 1/25.5 of SPI clock rate
-        #
-        # So DAC SPI clock is constantly running, /E is deactivated
-        # during the DAC transition for 2 cycles
-
-        # wavedrom file:
-        """{signal: [
-    ["DAC",
-     {name: 'SCLK',  wave: 'n............................'},
-     {name: 'DIN',   wave: '2.0xxxxxx2.3...............0x', data: ["Value-1", "PD", "Value"]},
-     {name: 'nSYNC', wave: '0.10.......................10'},
-     {name: 'OUT',   wave: 'z.1........................z.'},
-    ],
-
-    ["MUX",
-     {name: 'nE',    wave: '01.0......................1.0'},
-     {name: 'S',     wave: '2.2........................3.', data: ["S-2", "S-1", "S"]},
-    ],
-]}
-        """
-
-
-        # CLK divider
-
-        clkdiv = Signal(16)
-        self.sync += [
-            If(clkdiv == self._clkdiv.storage[:16],
-                clkdiv.eq(0)
-            ).Else(
-                clkdiv.eq(clkdiv + 1),
-            )
-        ]
-
-        clk = Signal()
-        clk_falling = Signal()
-        self.sync += [
-            clk_falling.eq(0),
-            If(clkdiv == 0,
-                clk.eq(~clk),
-                clk_falling.eq(~clk)
-            ),
-        ]
-
-        # FSM
-
-        self.submodules.fsm = FSM(reset_state="START")
-
-        dac_data = Array([self._v0.storage, self._v1.storage, self._v2.storage, self._v3.storage,
-                          self._v4.storage, self._v5.storage, self._v6.storage, self._v7.storage])
-
-        current_bit     = Signal(max=24)
-        current_channel = Signal(max=8)
-
-        pd = Signal(2)
-        pd.eq(self._control.storage[:2])
-
-        current_dac_word = Signal(24)
+        # SPI Master -------------------------------------------------------------------------------
+        spi = SPIMaster(
+            pads         = None,
+            data_width   = 24,
+            sys_clk_freq = sys_clk_freq,
+            spi_clk_freq = spi_clk_freq,
+            with_csr     = False
+        )
+        self.submodules += spi
         self.comb += [
-            current_dac_word[0:16].eq(dac_data[current_channel][:16]),
-            current_dac_word[16:18].eq(pd),
-            current_dac_word[18:24].eq(0)
+            pads.sclk.eq(~spi.pads.clk),
+            pads.sync_n.eq(spi.pads.cs_n),
+            pads.din.eq(spi.pads.mosi),
         ]
 
-        self.fsm.act("START",
-            If(clk_falling,
-                NextValue(current_bit, 0),
-                NextValue(self.mux.nE, 1),
-                NextValue(self.spi.nSYNC, 1),
-                NextValue(self.spi.DIN, 0),
-                If(self._enable.storage[0],
-                    NextState("TRANSFER"),
-                ).Else(
-                    NextValue(current_channel, 0),
-                ),
+        # Control FSM ------------------------------------------------------------------------------
+        run     = Signal()
+        channel = Signal(2)
+        offset  = Signal(16)
+        self.submodules.fsm = fsm = FSM(reset_state="IDLE")
+        fsm.act("IDLE",
+            NextValue(run, 0),
+            If(self._control.fields.enable,
+                NextValue(channel, 0),
+                NextState("DAC-UPDATE")
             )
         )
-
-        self.fsm.act("TRANSFER",
-            If(clk_falling,
-                NextValue(self.spi.nSYNC, 0),
-                NextValue(self.mux.nE, 0),
-                NextValue(self.spi.DIN, Array(current_dac_word)[23 - current_bit]),
-                If(current_bit == 23,
-                    NextValue(self.mux.nE, 1),
-                    NextState("START"),
-                    NextValue(self.mux.S, current_channel),
-                    NextValue(current_channel, current_channel + 1)
-                ).Else(NextValue(current_bit, current_bit + 1))
+        self.comb += Case(channel, {
+            0 : offset.eq(self._ch1.storage),
+            1 : offset.eq(self._ch2.storage),
+            2 : offset.eq(self._ch3.storage),
+            3 : offset.eq(self._ch4.storage),
+        })
+        fsm.act("DAC-UPDATE",
+            NextValue(run, 1),
+            spi.start.eq(~run),
+            spi.length.eq(24),
+            spi.mosi[18:24].eq(0b000000),                  # Unused.
+            spi.mosi[16:18].eq(self._control.fields.mode), # Operating mode.
+            spi.mosi[:16].eq(offset),                      # Data.
+            If(run & spi.done,
+                NextValue(run, 0),
+                NextState("MUX-UPDATE")
             )
         )
-
-        # output SPI CLK (if enabled)
-        self.sync += self.spi.SCLK.eq(clk & self._enable.storage[0])
+        mux_timer = WaitTimer(int(sys_clk_freq*8e-6))
+        self.submodules += mux_timer
+        fsm.act("MUX-UPDATE",
+            mux_timer.wait.eq(1),
+            pads.s.eq(channel + 4), # +4 : See mapping in description.
+            pads.e_n.eq(0),
+            If(mux_timer.done,
+                NextState("CHANNEL-INCR")
+            )
+        )
+        fsm.act("CHANNEL-INCR",
+            NextValue(channel, channel + 1),
+            NextState("DAC-UPDATE"),
+            If(channel == (4-1),
+                NextState("IDLE")
+            )
+        )
 
 # Simulation ---------------------------------------------------------------------------------------
 
-from litex.gen.fhdl import verilog
 from litex.gen.sim import run_simulation
 
 if __name__ == '__main__':
@@ -173,5 +171,5 @@ if __name__ == '__main__':
             yield
 
     print("Running OffsetDAC simulation...")
-    t = OffsetDAC()
+    t = OffsetDAC(default_enable=1)
     run_simulation(t, testbench_offsetdac(t), vcd_name="offset_dac.vcd")
