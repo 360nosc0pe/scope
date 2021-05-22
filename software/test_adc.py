@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
 
+#
+# This file is part of 360nosc0pe/scope project.
+#
+# Copyright (c) 2021 Felix Domke <tmbinc@elitedvb.net>
+# SPDX-License-Identifier: BSD-2-Clause
+
+# ADC test utility.
+
 import time
 
 from litex import RemoteClient
