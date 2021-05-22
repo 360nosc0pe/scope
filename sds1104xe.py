@@ -105,7 +105,9 @@ class ScopeSoC(SoCMini):
         # SoCMini ----------------------------------------------------------------------------------
         SoCMini.__init__(self, platform, sys_clk_freq,
             ident          = "ScopeSoC on Siglent SDS1104X-E",
-            ident_version  = True
+            ident_version  = True,
+            with_uart      = True,
+            uart_name      = "crossover",
         )
 
         # CRG --------------------------------------------------------------------------------------
@@ -136,8 +138,8 @@ class ScopeSoC(SoCMini):
             "v_sync_width"  : 1,
         })
         self.submodules.lcdphy = VideoVGAPHY(platform.request("lcd"), clock_domain="lcd")
-        self.add_video_colorbars(phy=self.lcdphy, timings=video_timings, clock_domain="lcd")
-        #self.add_video_terminal(phy=self.videophy, timings=video_timings, clock_domain="lcd")
+        #self.add_video_colorbars(phy=self.lcdphy, timings=video_timings, clock_domain="lcd")
+        self.add_video_terminal(phy=self.lcdphy, timings=video_timings, clock_domain="lcd")
 
         # Scope ------------------------------------------------------------------------------------
 
