@@ -139,61 +139,98 @@ class ScopeSoC(SoCMini):
         self.add_video_terminal(phy=self.lcdphy, timings=video_timings, clock_domain="lcd")
 
         # Scope ------------------------------------------------------------------------------------
-
-        # Offset DAC/MUX
-        self.submodules.offset_dac = OffsetDAC(platform.request("offset_dac"),
-            sys_clk_freq = sys_clk_freq,
-            spi_clk_freq = int(250e3)
-        )
-
-        # SPI for
-        #  - CS0: PLL
-        #  - CS1: ADC0
-        #  - CS2: ADC1
-        #  - CS3: Frontend (shift register)
-        #  - CS4..7: Variable Gain Amplifier CH1..CH4
         #
-        # set SPI length to 40 bit max, so it can cover the full FE shift register.
-
+        # Description
+        # -----------
+        # The SDS1104X-E is equipped with 2 x 1GSa/s AD1511 8-bit ADDs and has 4 independent
+        # frontends for each channel:
+        #                                          SPI
+        #                                (PLL/ADC/Frontends config)
+        #                                           ▲
+        #                                           │
+        #                                       ┌───┴───┐
+        #                           LVDS(8-bit) │       │ LVDS (8-bit)
+        #                             ┌────────►│ FPGA  │◄────────┐
+        #                             │         │       │         │
+        #                             │         └───────┘         │
+        #                             │                           │
+        #                          ┌──┴───┐      ┌─────┐      ┌───┴──┐
+        #                          │ ADC0 │◄─────┤ PLL ├─────►│ ADC1 │
+        #                          │      │      └─────┘      │      │
+        #                       ┌─►│AD1511│◄──┐            ┌─►│AD1511│◄──┐
+        #                       │  └──────┘   │            │  └──────┘   │
+        #                       │             │            │             │
+        #                  ┌────┴────┐   ┌────┴────┐  ┌────┴────┐   ┌────┴────┐
+        #                  │Frontend0│   │Frontend1│  │Frontend2│   │Frontend3│
+        #                  └────┬────┘   └────┬────┘  └────┬────┘   └────┬────┘
+        #                       │             │            │             │
+        #                       │             │            │             │
+        #                      BNC0          BNC1         BNC2          BNC3
         #
-        # FE bits are:
-        # - 01 ?
-        # - 02 First divider, 10:1, active high
-        # - 04 Second divider, 10:1, active high
-        # - 08 AC coupling, low = AC, high = DC
-        # - 10 PGA enable, active high
-        # - 20 BW limit, low = 20MHz, high = full
-        # - 40 ?
-        # - 80 ?
+        # Each ADC is connected to 2 frontends, allowing up to 1GSa/s when selecting only 1 channel
+        # and up to 500MSa/s with the 2 channels.
+        # A common PLL is used to generate the reference clocks of the ADCs.
+        # A common SPI bus is used for the control, with separate CS pins for each chip/part:
+        # - CS0: PLL.
+        # - CS1: ADC0.
+        # - CS2: ADC1.
+        # - CS3: Frontend (40-bit shift register).
+        # - CS4..7: Variable Gain Amplifier CH1..CH4.
         #
-        # So to set reasonable defaults (1V range), use:
+        # Frontends
+        # ---------
+        # Each frontend is composed of 2 x 10:1 dividers, AC coupling, BW limitation features, a
+        # a AD8370 Variable Gain Amplifier (VGA) and a AD4932 ADC Driver:
         #
-        # (double-check SPI CSR base address)
-        # mem_write 0x82005018 8
-        # mem_write 0x82005008 0x00
-        # mem_write 0x8200500C 0x78787878  # CH4, CH3, CH2, CH1
-        # mem_write 0x82005000 0x2801
+        #                      ┌──────────────────┐  ┌──────┐  ┌────────┐
+        #                      │ 2 x 10:1 Dividers│  │  VGA │  │  ADC   │
+        #                 BNC─►│ AC/DC coupling   ├─►│      ├─►│ Driver ├─►To ADC
+        #                      │ BW limitation    │  │AD8370│  │ AD4932 │
+        #                      └──────────────────┘  └──────┘  └────────┘
         #
-
-        # PLL:
+        # Frontends are controlled through a 40-bit shift register (8-bit shift register for each
+        # channel + 1 ? shift register) (over the SPI bus), with the following bit mapping for
+        # each channel:
+        # - bit 0: ?
+        # - bit 1: First  10:1 divider, active high.
+        # - bit 2: Second 10:1 divider, active high.
+        # - bit 3: AC coupling, low = AC, high = DC.
+        # - bit 4: PGA enable, active high.
+        # - bit 5: BW limit, low = 20MHz, high = full.
+        # - bit 6: ?
+        # - bit 7: ?
+        # To set reasonable defaults (1V range) 0x78 can be used.
+        # FIXME: Understand unknown bits.
+        # FIXME: Understand why 40 total bit instead of 32-bit (4x8-bit).
         #
+        # PLL
+        # ---
         # Use these settings:
-        # 40 31 20 # CONTROL
-        # 04 E1 42 # NCOUNTER
-        # 00 07 D1 # RCOUNTER
+        #  - 40 31 20 # CONTROL
+        #  - 04 E1 42 # NCOUNTER
+        #  - 00 07 D1 # RCOUNTER
+        #  FIXME: Document.
         #
-
-        # ADC:
+        # ADC
+        # ---
         # Needs a slighly more complicated setup.
         # https://github.com/360nosc0pe/software/blob/master/cheapscope/cheapscope.py has some example code.
-
         #
         # Total channel gain:
         # Each channel has two 10:1 dividers, a VGA and an ADC gain.
         # The dividers are configured in the FE bits.
         # Each VGA is on its own chip-select, see AD8370 spec.
         # The two ADCs are on separate chip selects. +0, +2, +4, +6, +9 dB can be selected.
-        #
+
+        # Offset DAC/MUX
+        # --------------
+        self.submodules.offset_dac = OffsetDAC(platform.request("offset_dac"),
+            sys_clk_freq = sys_clk_freq,
+            spi_clk_freq = int(250e3)
+        )
+
+        # ADC + Frontends
+        # ---------------
 
         pads = self.platform.request("spi")
         pads.miso = Signal()
