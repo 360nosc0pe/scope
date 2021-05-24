@@ -16,9 +16,8 @@ from litex.soc.interconnect.csr import *
 
 class AD1511(Module, AutoCSR):
     def __init__(self, pads, n):
-        assert hasattr(pads, "d")
-        assert hasattr(pads, "fclk")
-        assert hasattr(pads, "lclk")
+        for name in ["fclk_p", "fclk_n", "lclk_p", "lclk_n", "d_p", "d_n"]:
+            assert hasattr(pads, name)
 
         self._status  = CSRStatus(32, reset=0xadc)
         self._control = CSRStorage(32)
@@ -32,7 +31,7 @@ class AD1511(Module, AutoCSR):
 
         self.bitslip_do = Signal()
 
-        N_CHANNELS = len(pads.d) // 2
+        N_CHANNELS = len(pads.d_p)
 
         self.d_preslip = Signal(N_CHANNELS * 8)
         self.d         = Signal(N_CHANNELS * 8)
@@ -57,8 +56,8 @@ class AD1511(Module, AutoCSR):
 
         self.specials += [
             Instance("IBUFDS",
-                i_I  = pads.lclk[0],
-                i_IB = pads.lclk[1],
+                i_I  = pads.lclk_p,
+                i_IB = pads.lclk_n,
                 o_O  = lclk_i
             ),
             Instance("BUFIO", i_I=lclk_i, o_O=lclk_i_bufio),
@@ -70,11 +69,11 @@ class AD1511(Module, AutoCSR):
         for i in range(N_CHANNELS + 1):
 
             if i == N_CHANNELS: # fclk
-                d_p = pads.fclk[0]
-                d_n = pads.fclk[1]
+                d_p = pads.fclk_p
+                d_n = pads.fclk_n
             else:
-                d_p = pads.d[i * 2 + 0]
-                d_n = pads.d[i * 2 + 1]
+                d_p = pads.d_p[i]
+                d_n = pads.d_n[i]
 
             # pad -> IBUFDS_DIFF_OUT
             serdes_i_nodelay = Signal()

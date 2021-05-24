@@ -54,22 +54,24 @@ scope_ios = [
         IOStandard("LVCMOS15"),
     ),
 
-    # ADC HAD1511 X2
+    # ADCs (2X AD1511).
     ("adc", 0,
-        Subsignal("d", Pins(
-            "AA12 AB12 AA11 AB11 W11 W10  U10  U9", # D0..D3, each P/N
-            "V10    V9   V8   W8 Y11 Y10 AB10 AB9")),
-        Subsignal("lclk", Pins("Y9 Y8")),
-        Subsignal("fclk", Pins("AA9 AA8")),
+        Subsignal("lclk_p", Pins("Y9")),
+        Subsignal("lclk_n", Pins("Y8")),
+        Subsignal("fclk_p", Pins("AA9")),
+        Subsignal("fclk_n", Pins("AA8")),
+        Subsignal("d_p", Pins("AA12 AA11 W11 U10 V10 V8 Y11 AB10")),
+        Subsignal("d_n", Pins("AB12 AB11 W10  U9  V9 W8 Y10  AB9")),
         IOStandard("LVDS_25"),
         Misc("DIFF_TERM=TRUE"),
     ),
     ("adc", 1,
-        Subsignal("d", Pins(
-            "AB7 AB6 AB5 AB4 V7  W7  U6  U5",
-            "W6   W5  V5  V4 Y4 AA4 AB2 AB1")),
-        Subsignal("lclk", Pins("Y6 Y5")),
-        Subsignal("fclk", Pins("AA7 AA6")),
+        Subsignal("lclk_p", Pins("Y6")),
+        Subsignal("lclk_n", Pins("Y5")),
+        Subsignal("fclk_p", Pins("AA7")),
+        Subsignal("fclk_n", Pins("AA6")),
+        Subsignal("d_p", Pins("AB7 AB5 V7 U6 W6 V5  Y4 AB2")),
+        Subsignal("d_n", Pins("AB6 AB4 W7 U5 W5 V4 AA4 AB1")),
         IOStandard("LVDS_25"),
         Misc("DIFF_TERM=TRUE"),
     ),
