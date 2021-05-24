@@ -56,21 +56,21 @@ scope_ios = [
 
     # ADCs (2X AD1511).
     ("adc", 0,
-        Subsignal("lclk_p", Pins("Y9")),
+        Subsignal("lclk_p", Pins("Y9")),  # Bitclock.
         Subsignal("lclk_n", Pins("Y8")),
-        Subsignal("fclk_p", Pins("AA9")),
+        Subsignal("fclk_p", Pins("AA9")), # Frameclock.
         Subsignal("fclk_n", Pins("AA8")),
-        Subsignal("d_p", Pins("AA12 AA11 W11 U10 V10 V8 Y11 AB10")),
+        Subsignal("d_p", Pins("AA12 AA11 W11 U10 V10 V8 Y11 AB10")), # Data.
         Subsignal("d_n", Pins("AB12 AB11 W10  U9  V9 W8 Y10  AB9")),
         IOStandard("LVDS_25"),
         Misc("DIFF_TERM=TRUE"),
     ),
     ("adc", 1,
-        Subsignal("lclk_p", Pins("Y6")),
+        Subsignal("lclk_p", Pins("Y6")),  # Bitclock.
         Subsignal("lclk_n", Pins("Y5")),
-        Subsignal("fclk_p", Pins("AA7")),
+        Subsignal("fclk_p", Pins("AA7")), # Frameclock.
         Subsignal("fclk_n", Pins("AA6")),
-        Subsignal("d_p", Pins("AB7 AB5 V7 U6 W6 V5  Y4 AB2")),
+        Subsignal("d_p", Pins("AB7 AB5 V7 U6 W6 V5  Y4 AB2")), # Data.
         Subsignal("d_n", Pins("AB6 AB4 W7 U5 W5 V4 AA4 AB1")),
         IOStandard("LVDS_25"),
         Misc("DIFF_TERM=TRUE"),
@@ -96,7 +96,7 @@ class _CRG(Module):
 # ScopeSoC -----------------------------------------------------------------------------------------
 
 class ScopeSoC(SoCMini):
-    def __init__(self, sys_clk_freq=int(100e6), eth_ip="192.168.1.50"):
+    def __init__(self, sys_clk_freq=int(125e6), eth_ip="192.168.1.50"):
         # Platform ---------------------------------------------------------------------------------
         platform = sds1104xe.Platform()
         platform.add_extension(scope_ios)
@@ -240,27 +240,11 @@ class ScopeSoC(SoCMini):
         self.submodules.spi = SPIMaster(pads, 6*8, self.sys_clk_freq, 8e6)
 
         # ADCs.
-        self.submodules.adc0 = adc0 = AD1511(self.platform.request("adc", 0), 0)
-        self.submodules.adc1 = adc1 = AD1511(self.platform.request("adc", 1), 1)
-        self.comb += [
-            # Drive ADC0 signals.
-            adc0.d_ready.eq(1),
-            adc0.d_clk.eq(ClockSignal("sys")),
-            adc0.d_rst.eq(ResetSignal("sys")),
-            # Drive ADC1 signals.
-            adc1.d_ready.eq(1),
-            adc1.d_clk.eq(ClockSignal("sys")),
-            adc1.d_rst.eq(ResetSignal("sys")),
-        ]
+        self.submodules.adc0 = adc0 = AD1511(self.platform.request("adc", 0), sys_clk_freq)
+        self.submodules.adc1 = adc1 = AD1511(self.platform.request("adc", 1), sys_clk_freq)
 
         # Analyzer
-        analyzer_signals = [
-            self.adc0.fclk,
-            self.adc0.d,
-            self.adc0.d_valid,
-            self.adc0.d_last,
-            self.adc0.d_ready,
-        ]
+        analyzer_signals = [self.adc0.source]
         self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals,
             depth        = 8192,
             clock_domain = "sys",
