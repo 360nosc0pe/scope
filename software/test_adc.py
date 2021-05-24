@@ -63,20 +63,15 @@ class Frontend:
         self.set_vga(0, 0xad)
         self.set_adc_reg(0, 0x2B, 00)
 
-
-class ADCIf:
-    def __init__(self):
-        pass
-
-    def reset(self):
-        wb.regs.adcif0_control.write(1)
-        wb.regs.adcif0_control.write(0)
-        wb.regs.adcif1_control.write(1)
-        wb.regs.adcif1_control.write(0)
-
 class ADC:
     def __init__(self, ch):
         self.ch = ch
+
+    def reset(self):
+        wb.regs.adc0_control.write(1)
+        wb.regs.adc0_control.write(0)
+        wb.regs.adc1_control.write(1)
+        wb.regs.adc1_control.write(0)
 
     def data_mode(self):
         self.set_reg(0, 0x0001)
@@ -126,11 +121,8 @@ clock = Clock()
 clock.init()
 
 adc0 = ADC(0)
+adc0.reset()
 adc0.data_mode()
-
-adcif = ADCIf()
-adcif.reset()
-adcif.reset()
 
 offsetdac = OffsetDAC()
 frontend = Frontend(adc0, None, offsetdac)
@@ -141,8 +133,8 @@ frontend.set_ch1_1v()
 
 # ADC init
 
-print("ADC0", hex(wb.regs.adcif0_status.read()))
-print("ADC1", hex(wb.regs.adcif1_status.read()))
+print("ADC0", hex(wb.regs.adc0_status.read()))
+print("ADC1", hex(wb.regs.adc1_status.read()))
 
 offsetdac.init()
 offsetdac.set_ch(0, 0x2600)

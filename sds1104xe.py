@@ -25,7 +25,7 @@ from litex.soc.cores.video import VideoVGAPHY
 from liteeth.phy.mii import LiteEthPHYMII
 
 from peripherals.offset_dac import OffsetDAC
-from peripherals.adc import ADCLVDSReceiver
+from peripherals.adc import AD1511
 
 from peripherals.frontpanel import FrontpanelLeds, FrontpanelButtons
 
@@ -232,43 +232,33 @@ class ScopeSoC(SoCMini):
         # ADC + Frontends
         # ---------------
 
+        # SPI.
         pads = self.platform.request("spi")
         pads.miso = Signal()
         self.submodules.spi = SPIMaster(pads, 6*8, self.sys_clk_freq, 8e6)
 
-        # The ADC LVDS Interface
-        LVDS_ADC = [
-            ("d_p", 8, DIR_M_TO_S),
-            ("d_n", 8, DIR_M_TO_S),
-            ("fclk_p", 1, DIR_M_TO_S),
-            ("fclk_n", 1, DIR_M_TO_S),
-            ("lclk_p", 1, DIR_M_TO_S),
-            ("lclk_n", 1, DIR_M_TO_S),
+        # ADCs.
+        self.submodules.adc0 = adc0 = AD1511(self.platform.request("adc", 0), 0)
+        self.submodules.adc1 = adc1 = AD1511(self.platform.request("adc", 1), 1)
+        self.comb += [
+            # Drive ADC0 signals.
+            adc0.d_ready.eq(1),
+            adc0.d_clk.eq(ClockSignal("sys")),
+            adc0.d_rst.eq(ResetSignal("sys")),
+            # Drive ADC1 signals.
+            adc1.d_ready.eq(1),
+            adc1.d_clk.eq(ClockSignal("sys")),
+            adc1.d_rst.eq(ResetSignal("sys")),
         ]
 
-        self.submodules.adcif0 = ADCLVDSReceiver(self.platform.request("adc", 0), 0)
-
-        self.submodules.adcif1 = ADCLVDSReceiver(self.platform.request("adc", 1), 1)
-
-        # Litescope
-
+        # Analyzer
         analyzer_signals = [
-            self.adcif0.fclk,
-            self.adcif0.d,
-            self.adcif0.d_valid,
-            self.adcif0.d_last,
-            self.adcif0.d_ready,
+            self.adc0.fclk,
+            self.adc0.d,
+            self.adc0.d_valid,
+            self.adc0.d_last,
+            self.adc0.d_ready,
         ]
-
-        self.comb += self.adcif0.d_ready.eq(1)
-        self.comb += self.adcif1.d_ready.eq(1)
-
-        self.comb += self.adcif0.d_clk.eq(self.crg.cd_sys.clk)
-        self.comb += self.adcif0.d_rst.eq(self.crg.cd_sys.rst)
-
-        self.comb += self.adcif1.d_clk.eq(self.crg.cd_sys.clk)
-        self.comb += self.adcif1.d_rst.eq(self.crg.cd_sys.rst)
-
         self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals,
             depth        = 8192,
             clock_domain = "sys",

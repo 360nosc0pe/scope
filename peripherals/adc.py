@@ -12,9 +12,9 @@ from migen.genlib.cdc import MultiReg
 from litex.soc.interconnect.csr import *
 
 
-# ADC LVDS Receiver --------------------------------------------------------------------------------
+# AD1511 -------------------------------------------------------------------------------------------
 
-class ADCLVDSReceiver(Module, AutoCSR):
+class AD1511(Module, AutoCSR):
     def __init__(self, pads, n):
         assert hasattr(pads, "d")
         assert hasattr(pads, "fclk")
