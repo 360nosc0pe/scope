@@ -117,6 +117,14 @@ class ADC:
         self.set_reg(0x45, 1)
 
 
+class ADCDMA:
+    def run(self, base, length):
+        wb.regs.adc0_dma_base.write(base)
+        wb.regs.adc0_dma_length.write(length)
+        wb.regs.adc0_dma_enable.write(1)
+        while (wb.regs.adc0_dma_done.read() & 0x1) == 0:
+            time.sleep(0.01)
+
 clock = Clock()
 clock.init()
 
@@ -138,5 +146,8 @@ print("ADC1", hex(wb.regs.adc1_status.read()))
 
 offsetdac.init()
 offsetdac.set_ch(0, 0x2600)
+
+adc0_dma = ADCDMA()
+adc0_dma.run(base=0x00000000, length=0x1000)
 
 wb.close()

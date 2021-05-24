@@ -21,10 +21,11 @@ from litex.soc.integration.soc_core import *
 from litex.soc.integration.builder import *
 from litex.soc.cores.spi import SPIMaster
 from litex.soc.cores.video import VideoVGAPHY
-
+from litex.soc.interconnect import stream
 
 from litedram.modules import MT41K64M16
 from litedram.phy import s7ddrphy
+from litedram.frontend.dma import LiteDRAMDMAWriter
 
 from liteeth.phy.mii import LiteEthPHYMII
 
@@ -274,10 +275,19 @@ class ScopeSoC(SoCCore):
         self.submodules.adc0 = adc0 = AD1511(self.platform.request("adc", 0), sys_clk_freq)
         self.submodules.adc1 = adc1 = AD1511(self.platform.request("adc", 1), sys_clk_freq)
 
+        # ADC DMA
+        # -------
+        adc0_dram_port = self.sdram.crossbar.get_port()
+        self.submodules.adc0_conv = stream.Converter(64, adc0_dram_port.data_width)
+        self.submodules.adc0_dma  = LiteDRAMDMAWriter(adc0_dram_port, fifo_depth=128, with_csr=True)
+        self.comb += self.adc0.source.connect(self.adc0_conv.sink)
+        self.comb += self.adc0_conv.source.connect(self.adc0_dma.sink)
+
         # Analyzer
-        analyzer_signals = [self.adc0.source]
+        # --------
+        analyzer_signals = [self.adc0_dma.sink]
         self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals,
-            depth        = 8192,
+            depth        = 1024,
             clock_domain = "sys",
             csr_csv      = "software/analyzer.csv")
 
