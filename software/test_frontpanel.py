@@ -30,13 +30,13 @@ def leds_test(port):
     print("Leds ON  >>...")
     for i in range(19):
         leds_value |= (1<<i)
-        bus.regs.leds_value.write(leds_value)
+        bus.regs.fpleds_value.write(leds_value)
         time.sleep(0.05)
 
     print("Leds OFF >>...")
     for i in range(19):
         leds_value &= ~(1<<i)
-        bus.regs.leds_value.write(leds_value)
+        bus.regs.fpleds_value.write(leds_value)
         time.sleep(0.05)
 
     bus.close()
@@ -49,15 +49,15 @@ def buttons_test(port):
 
 
     leds_value = 0
-    bus.regs.leds_value.write(leds_value)
+    bus.regs.fpleds_value.write(leds_value)
 
     print("Scanning buttons...")
     while True:
         # Scan buttons.
-        old_value = bus.regs.btns_value.read()
+        old_value = bus.regs.fpbtns_value.read()
         new_value = old_value
         while new_value == old_value:
-            new_value = bus.regs.btns_value.read()
+            new_value = bus.regs.fpbtns_value.read()
             time.sleep(0.1)
 
         # Find buttons.
@@ -77,7 +77,7 @@ def buttons_test(port):
         for fp_led in FP_LEDS:
             if fp_led.name == fp_btn.name:
                 leds_value ^= fp_led.value
-                bus.regs.leds_value.write(leds_value)
+                bus.regs.fpleds_value.write(leds_value)
 
         time.sleep(0.1)
 

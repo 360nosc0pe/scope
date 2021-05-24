@@ -22,6 +22,10 @@ from litex.soc.integration.builder import *
 from litex.soc.cores.spi import SPIMaster
 from litex.soc.cores.video import VideoVGAPHY
 
+
+from litedram.modules import MT41K64M16
+from litedram.phy import s7ddrphy
+
 from liteeth.phy.mii import LiteEthPHYMII
 
 from peripherals.offset_dac import OffsetDAC
@@ -80,37 +84,64 @@ scope_ios = [
 # CRG ----------------------------------------------------------------------------------------------
 
 class _CRG(Module):
-    def __init__(self, platform, sys_clk_freq):
-        self.clock_domains.cd_sys    = ClockDomain()
-        self.clock_domains.cd_lcd    = ClockDomain()
-        self.clock_domains.cd_idelay = ClockDomain()
+    def __init__(self, platform, sys_clk_freq, with_ethernet=False):
+        self.rst = Signal()
+        self.clock_domains.cd_sys       = ClockDomain()
+        self.clock_domains.cd_sys4x     = ClockDomain(reset_less=True)
+        self.clock_domains.cd_sys4x_dqs = ClockDomain(reset_less=True)
+        self.clock_domains.cd_idelay    = ClockDomain()
+        self.clock_domains.cd_lcd       = ClockDomain()
 
+        # # #
+
+        # Clk / Rst
+        clk25 = ClockSignal("eth_tx") if with_ethernet else platform.request("eth_clocks").rx
+
+        # PLL
         self.submodules.pll = pll = S7PLL(speedgrade=-1)
-        pll.register_clkin(ClockSignal("eth_tx"), 25e6)
-        pll.create_clkout(self.cd_sys,    sys_clk_freq)
-        pll.create_clkout(self.cd_lcd,    33.3e6)
-        pll.create_clkout(self.cd_idelay, 200e6)
+        pll.register_clkin(clk25, 25e6)
+        pll.create_clkout(self.cd_sys,       sys_clk_freq)
+        pll.create_clkout(self.cd_sys4x,     4*sys_clk_freq)
+        pll.create_clkout(self.cd_sys4x_dqs, 4*sys_clk_freq, phase=90)
+        pll.create_clkout(self.cd_idelay,    200e6)
+        pll.create_clkout(self.cd_lcd,       33.3e6)
+        platform.add_false_path_constraints(self.cd_sys.clk, pll.clkin) # Ignore sys_clk to pll.clkin path created by SoC's rst.
 
         self.submodules.idelayctrl = S7IDELAYCTRL(self.cd_idelay)
 
+
 # ScopeSoC -----------------------------------------------------------------------------------------
 
-class ScopeSoC(SoCMini):
+class ScopeSoC(SoCCore):
     def __init__(self, sys_clk_freq=int(125e6), eth_ip="192.168.1.50"):
         # Platform ---------------------------------------------------------------------------------
         platform = sds1104xe.Platform()
         platform.add_extension(scope_ios)
 
-        # SoCMini ----------------------------------------------------------------------------------
-        SoCMini.__init__(self, platform, sys_clk_freq,
-            ident          = "ScopeSoC on Siglent SDS1104X-E",
-            ident_version  = True,
-            with_uart      = True,
-            uart_name      = "crossover",
+        # SoCCore ----------------------------------------------------------------------------------
+        SoCCore.__init__(self, platform, sys_clk_freq,
+            ident               = "ScopeSoC on Siglent SDS1104X-E",
+            ident_version       = True,
+            uart_name           = "crossover",
+            cpu_type            = "vexriscv",
+            cpu_variant         = "lite", # CPU only used to initialize DDR3 for now, Lite is enough.
+            integrated_rom_size = 0x10000,
+        )
+
+        # DDR3 SDRAM -------------------------------------------------------------------------------
+        self.submodules.ddrphy = s7ddrphy.A7DDRPHY(platform.request("ddram"),
+            memtype        = "DDR3",
+            nphases        = 4,
+            sys_clk_freq   = sys_clk_freq)
+        self.add_sdram("sdram",
+            phy              = self.ddrphy,
+            module           = MT41K64M16(sys_clk_freq, "1:4"),
+            l2_cache_size    = 1024,
+            l2_cache_reverse = False,
         )
 
         # CRG --------------------------------------------------------------------------------------
-        self.submodules.crg = _CRG(platform, sys_clk_freq)
+        self.submodules.crg = _CRG(platform, sys_clk_freq, with_ethernet=True)
 
         # Etherbone --------------------------------------------------------------------------------
         self.submodules.ethphy = LiteEthPHYMII(
@@ -119,10 +150,10 @@ class ScopeSoC(SoCMini):
         self.add_etherbone(phy=self.ethphy, ip_address=eth_ip)
 
         # Frontpanel Leds --------------------------------------------------------------------------
-        self.submodules.leds = FrontpanelLeds(platform.request("led_frontpanel"), sys_clk_freq)
+        self.submodules.fpleds = FrontpanelLeds(platform.request("led_frontpanel"), sys_clk_freq)
 
         # Frontpanel Buttons -----------------------------------------------------------------------
-        self.submodules.btns = FrontpanelButtons(platform.request("btn_frontpanel"), sys_clk_freq)
+        self.submodules.fpbtns = FrontpanelButtons(platform.request("btn_frontpanel"), sys_clk_freq)
 
         # LCD --------------------------------------------------------------------------------------
         video_timings = ("800x480@60Hz", {
