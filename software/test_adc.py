@@ -4,23 +4,25 @@
 # This file is part of 360nosc0pe/scope project.
 #
 # Copyright (c) 2021 Felix Domke <tmbinc@elitedvb.net>
+# Copyright (c) 2021 Florent Kermarrec <florent@enjoy-digital.fr>
 # SPDX-License-Identifier: BSD-2-Clause
 
 # ADC test utility.
 
 import time
+import matplotlib.pyplot as plt
 
 from litex import RemoteClient
 
-wb = RemoteClient()
-wb.open()
+bus = RemoteClient()
+bus.open()
 
 def spi_write(cs, data):
-    wb.regs.spi_cs.write(1 << cs)
+    bus.regs.spi_cs.write(1 << cs)
     d = int.from_bytes(data, byteorder = 'big')
     d <<= ((6 - len(data))*8)
-    wb.regs.spi_mosi.write(d)
-    wb.regs.spi_control.write(0x01 | ((len(data) * 8) << 8))
+    bus.regs.spi_mosi.write(d)
+    bus.regs.spi_control.write(0x01 | ((len(data) * 8) << 8))
 
 class Clock:
     def init(self):
@@ -33,10 +35,10 @@ class Clock:
 
 class OffsetDAC:
     def init(self):
-        wb.regs.offset_dac_control.write(1)
+        bus.regs.offset_dac_control.write(1)
 
     def set_ch(self, ch, val):
-        getattr(wb.regs, f"offset_dac_ch{ch+1}").write(val)
+        getattr(bus.regs, f"offset_dac_ch{ch+1}").write(val)
 
 # frontend init
 class Frontend:
@@ -68,10 +70,10 @@ class ADC:
         self.ch = ch
 
     def reset(self):
-        wb.regs.adc0_control.write(1)
-        wb.regs.adc0_control.write(0)
-        wb.regs.adc1_control.write(1)
-        wb.regs.adc1_control.write(0)
+        bus.regs.adc0_control.write(1)
+        bus.regs.adc0_control.write(0)
+        bus.regs.adc1_control.write(1)
+        bus.regs.adc1_control.write(0)
 
     def data_mode(self):
         self.set_reg(0, 0x0001)
@@ -118,36 +120,55 @@ class ADC:
 
 
 class ADCDMA:
-    def run(self, base, length):
-        wb.regs.adc0_dma_base.write(base)
-        wb.regs.adc0_dma_length.write(length)
-        wb.regs.adc0_dma_enable.write(1)
-        while (wb.regs.adc0_dma_done.read() & 0x1) == 0:
-            time.sleep(0.01)
+    def __init__(self):
+        bus.regs.adc0_dma_enable.write(0)
 
+    def run(self, base, length):
+        bus.regs.adc0_dma_base.write(base)
+        bus.regs.adc0_dma_length.write(length)
+        bus.regs.adc0_dma_enable.write(1)
+        while not (bus.regs.adc0_dma_done.read() & 0x1):
+            pass
+        bus.regs.adc0_dma_enable.write(0)
+
+adc_dma_length = 0x10000
+
+print("Clock Init...")
 clock = Clock()
 clock.init()
 
-adc0 = ADC(0)
-adc0.reset()
-adc0.data_mode()
-
+print("OffsetDAC Init...")
 offsetdac = OffsetDAC()
-frontend = Frontend(adc0, None, offsetdac)
-frontend.set_ch1_1v()
-
-#adc0.ramp()
-#adc0.dual(0xfeed,0xbabe)
-
-# ADC init
-
-print("ADC0", hex(wb.regs.adc0_status.read()))
-print("ADC1", hex(wb.regs.adc1_status.read()))
-
 offsetdac.init()
 offsetdac.set_ch(0, 0x2600)
 
-adc0_dma = ADCDMA()
-adc0_dma.run(base=0x00000000, length=0x1000)
+print("ADC Init...")
+adc0 = ADC(0)
+adc0.reset()
+#adc0.data_mode()
+adc0.ramp()
 
-wb.close()
+print("Frontend Init...")
+frontend = Frontend(adc0, None, offsetdac)
+frontend.set_ch1_1v()
+
+print("ADC Data Capture (to DRAM)...")
+adc0_dma = ADCDMA()
+adc0_dma.run(base=0x0000_0000, length=adc_dma_length)
+
+print("ADC Data Retrieve (from DRAM)...")
+
+adc_data = []
+for i in range(adc_dma_length//4):
+    word = bus.read(bus.mems.main_ram.base + 4*i)
+    adc_data.append((word >> 0)  & 0xff)
+    adc_data.append((word >> 8)  & 0xff)
+    adc_data.append((word >> 16) & 0xff)
+    adc_data.append((word >> 24) & 0xff)
+
+print("Plot...")
+
+plt.plot(adc_data)
+plt.show()
+
+bus.close()
