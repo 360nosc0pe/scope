@@ -25,7 +25,7 @@ from litex.soc.interconnect import stream
 
 from litedram.modules import MT41K64M16
 from litedram.phy import s7ddrphy
-from litedram.frontend.dma import LiteDRAMDMAWriter
+from litedram.frontend.dma import LiteDRAMDMAWriter, LiteDRAMDMAReader
 
 from liteeth.phy.mii import LiteEthPHYMII
 
@@ -114,7 +114,7 @@ class _CRG(Module):
 # ScopeSoC -----------------------------------------------------------------------------------------
 
 class ScopeSoC(SoCCore):
-    def __init__(self, sys_clk_freq=int(100e6), eth_ip="192.168.1.50"):
+    def __init__(self, sys_clk_freq=int(100e6), scope_ip="192.168.1.50", host_ip="192.168.1.100", host_udp_port=2000, with_analyzer=False):
         # Platform ---------------------------------------------------------------------------------
         platform = sds1104xe.Platform()
         platform.add_extension(scope_ios)
@@ -148,7 +148,7 @@ class ScopeSoC(SoCCore):
         self.submodules.ethphy = LiteEthPHYMII(
             clock_pads = self.platform.request("eth_clocks"),
             pads       = self.platform.request("eth"))
-        self.add_etherbone(phy=self.ethphy, ip_address=eth_ip)
+        self.add_etherbone(phy=self.ethphy, ip_address=scope_ip)
 
         # Frontpanel Leds --------------------------------------------------------------------------
         self.submodules.fpleds = FrontpanelLeds(platform.request("led_frontpanel"), sys_clk_freq)
@@ -275,32 +275,77 @@ class ScopeSoC(SoCCore):
         self.submodules.adc0 = adc0 = AD1511(self.platform.request("adc", 0), sys_clk_freq)
         self.submodules.adc1 = adc1 = AD1511(self.platform.request("adc", 1), sys_clk_freq)
 
-        # ADC DMA
-        # -------
-        adc0_dram_port = self.sdram.crossbar.get_port()
-        self.submodules.adc0_conv = stream.Converter(64, adc0_dram_port.data_width)
-        self.submodules.adc0_dma  = LiteDRAMDMAWriter(adc0_dram_port, fifo_depth=128, with_csr=True)
-        self.comb += self.adc0.source.connect(self.adc0_conv.sink)
-        self.comb += self.adc0_conv.source.connect(self.adc0_dma.sink)
+        # ADC DMA Writer
+        # --------------
+        dram_port = self.sdram.crossbar.get_port()
+        self.submodules.adc0_writer_conv = stream.Converter(64, dram_port.data_width)
+        self.submodules.adc0_writer_dma  = LiteDRAMDMAWriter(dram_port, fifo_depth=1024, with_csr=True)
+        self.submodules += stream.Pipeline(
+            self.adc0,
+            self.adc0_writer_conv,
+            self.adc0_writer_dma
+        )
+
+        # ADC DMA Reader
+        # --------------
+        dram_port = self.sdram.crossbar.get_port()
+        self.submodules.adc0_reader_dma  = LiteDRAMDMAReader(dram_port, fifo_depth=128, with_csr=True)
+        self.submodules.adc0_reader_conv = stream.Converter(dram_port.data_width, 8)
+        self.submodules += stream.Pipeline(
+            self.adc0_reader_dma,
+            self.adc0_reader_conv
+        )
+
+        # ADC UDP Streamer
+        # -----------------
+        from liteeth.common import convert_ip
+        from liteeth.frontend.stream import LiteEthStream2UDPTX
+        udp_port       = self.ethcore.udp.crossbar.get_port(host_udp_port, dw=8)
+        udp_streamer   = LiteEthStream2UDPTX(
+            ip_address = convert_ip(host_ip),
+            udp_port   = host_udp_port,
+            fifo_depth = 1024
+        )
+        self.submodules.adc0_udp_cdc      = stream.ClockDomainCrossing([("data", 8)], "sys", "eth_tx")
+        self.submodules.adc0_udp_streamer = ClockDomainsRenamer("eth_tx")(udp_streamer)
+        self.submodules += stream.Pipeline(
+            self.adc0_reader_conv,
+            self.adc0_udp_cdc,
+            self.adc0_udp_streamer,
+            udp_port,
+        )
 
         # Analyzer
         # --------
-        analyzer_signals = [self.adc0_dma.sink]
-        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals,
-            depth        = 1024,
-            clock_domain = "sys",
-            csr_csv      = "software/analyzer.csv")
+        if with_analyzer:
+            analyzer_signals = [
+                self.adc0_reader_conv.source,
+                self.adc0_udp_cdc.source,
+                self.adc0_udp_streamer.sink
+            ]
+            self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals,
+                depth        = 1024,
+                clock_domain = "sys",
+                csr_csv      = "software/analyzer.csv")
 
 # Build --------------------------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description="Experiments with a SDS1104X-E Scope and LiteX")
-    parser.add_argument("--build",  action="store_true",              help="Build bitstream")
-    parser.add_argument("--load",   action="store_true",              help="Load bitstream")
-    parser.add_argument("--eth-ip", default="192.168.1.50", type=str, help="Ethernet/Etherbone IP address")
+    parser = argparse.ArgumentParser(description="Experiments with a SDS1104X-E Scope and LiteX.")
+    parser.add_argument("--build",         action="store_true",               help="Build bitstream.")
+    parser.add_argument("--load",          action="store_true",               help="Load bitstream.")
+    parser.add_argument("--scope-ip",      default="192.168.1.50",  type=str, help="Scope IP address.")
+    parser.add_argument("--host-ip",       default="192.168.1.100", type=str, help="Host  IP address.")
+    parser.add_argument("--host-udp-port", default=2000,            type=int, help="Host UDP port.")
+    parser.add_argument("--with-analyzer", action="store_true",               help="Enable Logic Analyzer.")
     args = parser.parse_args()
 
-    soc = ScopeSoC(eth_ip=args.eth_ip)
+    soc = ScopeSoC(
+        scope_ip      = args.scope_ip,
+        host_ip       = args.host_ip,
+        host_udp_port = args.host_udp_port,
+        with_analyzer = args.with_analyzer
+    )
 
     builder = Builder(soc, csr_csv="software/csr.csv")
     builder.build(run=args.build)
