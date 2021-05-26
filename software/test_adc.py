@@ -81,9 +81,9 @@ class ADC:
         self.set_reg(0xF, 0x200)
         time.sleep(.1)
         self.set_reg(0x31, 0x0001)
-#        self.set_reg(0x53, 0x0000)
-#        self.set_reg(0x31, 0x0008)
-#        self.set_reg(0x53, 0x0004)
+        #self.set_reg(0x53, 0x0000)
+        #self.set_reg(0x31, 0x0008)
+        #self.set_reg(0x53, 0x0004)
 
         self.set_reg(0x0F, 0x0000)
         self.set_reg(0x30, 0x0008)
@@ -120,18 +120,15 @@ class ADC:
 
 
 class ADCDMA:
-    def __init__(self):
-        bus.regs.adc0_dma_enable.write(0)
-
     def run(self, base, length):
-        bus.regs.adc0_dma_base.write(base)
-        bus.regs.adc0_dma_length.write(length)
-        bus.regs.adc0_dma_enable.write(1)
-        while not (bus.regs.adc0_dma_done.read() & 0x1):
-            pass
-        bus.regs.adc0_dma_enable.write(0)
+        bus.regs.adc0_writer_dma_enable.write(0)
+        bus.regs.adc0_writer_dma_base.write(base)
+        bus.regs.adc0_writer_dma_length.write(length)
+        bus.regs.adc0_writer_dma_enable.write(1)
+        while not (bus.regs.adc0_writer_dma_done.read() & 0x1):
+            print(bus.regs.adc0_writer_dma_offset.read())
 
-adc_dma_length = 0x10000
+adc_dma_length = 4*0x1000
 
 print("Clock Init...")
 clock = Clock()
@@ -153,22 +150,37 @@ frontend = Frontend(adc0, None, offsetdac)
 frontend.set_ch1_1v()
 
 print("ADC Data Capture (to DRAM)...")
-adc0_dma = ADCDMA()
-adc0_dma.run(base=0x0000_0000, length=adc_dma_length)
+adc0_writer_dma = ADCDMA()
+adc0_writer_dma.run(base=0x0000_0000, length=adc_dma_length)
 
-print("ADC Data Retrieve (from DRAM)...")
 
-adc_data = []
-for i in range(adc_dma_length//4):
-    word = bus.read(bus.mems.main_ram.base + 4*i)
-    adc_data.append((word >> 0)  & 0xff)
-    adc_data.append((word >> 8)  & 0xff)
-    adc_data.append((word >> 16) & 0xff)
-    adc_data.append((word >> 24) & 0xff)
+if True:
+    print("ADC Data Retrieve (from DRAM)...")
 
-print("Plot...")
+    adc_data = []
+    for i in range(adc_dma_length//4):
+        word = bus.read(bus.mems.main_ram.base + 4*i)
+        adc_data.append((word >> 0)  & 0xff)
+        adc_data.append((word >> 8)  & 0xff)
+        adc_data.append((word >> 16) & 0xff)
+        adc_data.append((word >> 24) & 0xff)
 
-plt.plot(adc_data)
-plt.show()
+    print("Plot...")
+    plt.plot(adc_data)
+    plt.show()
+
+else:
+    print("ADC Data Upload (from DRAM over UDP Streamer)...")
+    class ADCUpload:
+        def run(self, base, length):
+            bus.regs.adc0_reader_dma_enable.write(0)
+            bus.regs.adc0_reader_dma_base.write(base)
+            bus.regs.adc0_reader_dma_length.write(length)
+            bus.regs.adc0_reader_dma_enable.write(1)
+            while not (bus.regs.adc0_reader_dma_done.read() & 0x1):
+                print(bus.regs.adc0_reader_dma_offset.read())
+            bus.regs.adc0_reader_dma_enable.write(0)
+    adc0_upload = ADCUpload()
+    adc0_upload.run(base=0x0000_0000, length=adc_dma_length)
 
 bus.close()
