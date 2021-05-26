@@ -114,7 +114,7 @@ class _CRG(Module):
 # ScopeSoC -----------------------------------------------------------------------------------------
 
 class ScopeSoC(SoCCore):
-    def __init__(self, sys_clk_freq=int(125e6), eth_ip="192.168.1.50"):
+    def __init__(self, sys_clk_freq=int(100e6), eth_ip="192.168.1.50"):
         # Platform ---------------------------------------------------------------------------------
         platform = sds1104xe.Platform()
         platform.add_extension(scope_ios)
