@@ -10,6 +10,7 @@
 # ADC test utility.
 
 import time
+import socket
 import matplotlib.pyplot as plt
 
 from litex import RemoteClient
@@ -126,9 +127,10 @@ class ADCDMA:
         bus.regs.adc0_dma_length.write(length)
         bus.regs.adc0_dma_enable.write(1)
         while not (bus.regs.adc0_dma_done.read() & 0x1):
-            print(bus.regs.adc0_dma_offset.read())
+            #print(bus.regs.adc0_dma_offset.read())
+            pass
 
-adc_dma_length = 4*0x1000
+adc_dma_length = 0x10000
 
 print("Clock Init...")
 clock = Clock()
@@ -155,14 +157,29 @@ adc0_dma.run(base=0x0000_0000, length=adc_dma_length)
 
 
 print("ADC Data Retrieve (from DRAM)...")
-
 adc_data = []
-for i in range(adc_dma_length//4):
-    word = bus.read(bus.mems.main_ram.base + 4*i)
-    adc_data.append((word >> 0)  & 0xff)
-    adc_data.append((word >> 8)  & 0xff)
-    adc_data.append((word >> 16) & 0xff)
-    adc_data.append((word >> 24) & 0xff)
+length   = adc_dma_length
+offset   = 0
+sock     = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.bind(("192.168.1.100", 2000))
+
+while length > 0:
+    bus.regs.dma_reader_enable.write(0)
+    bus.regs.dma_reader_base.write(0x0000_0000 + offset)
+    bus.regs.dma_reader_length.write(1024)
+    bus.regs.dma_reader_enable.write(1)
+    data, _ = sock.recvfrom(1024)
+    for b in data:
+        adc_data.append(b)
+    length -= len(data)
+    offset += len(data)
+
+#for i in range(adc_dma_length//4):
+#    word = bus.read(bus.mems.main_ram.base + 4*i)
+#    adc_data.append((word >> 0)  & 0xff)
+#    adc_data.append((word >> 8)  & 0xff)
+#    adc_data.append((word >> 16) & 0xff)
+#    adc_data.append((word >> 24) & 0xff)
 
 print("Plot...")
 plt.plot(adc_data)
