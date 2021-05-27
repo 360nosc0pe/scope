@@ -273,20 +273,16 @@ class ScopeSoC(SoCCore):
         pads.miso = Signal()
         self.submodules.spi = SPIMaster(pads, 6*8, self.sys_clk_freq, 8e6)
 
-        # ADCs.
-        self.submodules.adc0 = adc0 = AD1511(self.platform.request("adc", 0), sys_clk_freq)
-        self.submodules.adc1 = adc1 = AD1511(self.platform.request("adc", 1), sys_clk_freq)
-
-        # ADC DMA
-        # -------
-        dram_port = self.sdram.crossbar.get_port()
-        self.submodules.adc0_conv = stream.Converter(64, dram_port.data_width)
-        self.submodules.adc0_dma  = LiteDRAMDMAWriter(dram_port, fifo_depth=16, with_csr=True)
-        self.submodules += stream.Pipeline(
-            self.adc0,
-            self.adc0_conv,
-            self.adc0_dma
-        )
+        # ADCs + DMAs.
+        for i in range(2):
+            adc  = AD1511(self.platform.request("adc", i), sys_clk_freq)
+            port = self.sdram.crossbar.get_port()
+            conv = stream.Converter(64, port.data_width)
+            dma  = LiteDRAMDMAWriter(self.sdram.crossbar.get_port(), fifo_depth=16, with_csr=True)
+            setattr(self.submodules, f"adc{i}",      adc)
+            setattr(self.submodules, f"adc{i}_conv", conv)
+            setattr(self.submodules, f"adc{i}_dma",  dma)
+            self.submodules += stream.Pipeline(adc, conv, dma)
 
         # Upload -----------------------------------------------------------------------------------
         # DMA Reader
@@ -329,7 +325,8 @@ class ScopeSoC(SoCCore):
             self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals,
                 depth        = 1024,
                 clock_domain = "sys",
-                csr_csv      = "software/analyzer.csv")
+                csr_csv      = "software/analyzer.csv"
+            )
 
 # Build --------------------------------------------------------------------------------------------
 
