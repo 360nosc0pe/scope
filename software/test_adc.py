@@ -121,12 +121,12 @@ class ADC:
 
 class ADCDMA:
     def run(self, base, length):
-        bus.regs.adc0_writer_dma_enable.write(0)
-        bus.regs.adc0_writer_dma_base.write(base)
-        bus.regs.adc0_writer_dma_length.write(length)
-        bus.regs.adc0_writer_dma_enable.write(1)
-        while not (bus.regs.adc0_writer_dma_done.read() & 0x1):
-            print(bus.regs.adc0_writer_dma_offset.read())
+        bus.regs.adc0_dma_enable.write(0)
+        bus.regs.adc0_dma_base.write(base)
+        bus.regs.adc0_dma_length.write(length)
+        bus.regs.adc0_dma_enable.write(1)
+        while not (bus.regs.adc0_dma_done.read() & 0x1):
+            print(bus.regs.adc0_dma_offset.read())
 
 adc_dma_length = 4*0x1000
 
@@ -150,8 +150,8 @@ frontend = Frontend(adc0, None, offsetdac)
 frontend.set_ch1_1v()
 
 print("ADC Data Capture (to DRAM)...")
-adc0_writer_dma = ADCDMA()
-adc0_writer_dma.run(base=0x0000_0000, length=adc_dma_length)
+adc0_dma = ADCDMA()
+adc0_dma.run(base=0x0000_0000, length=adc_dma_length)
 
 
 if True:

@@ -27,7 +27,9 @@ from litedram.modules import MT41K64M16
 from litedram.phy import s7ddrphy
 from litedram.frontend.dma import LiteDRAMDMAWriter, LiteDRAMDMAReader
 
+from liteeth.common import convert_ip
 from liteeth.phy.mii import LiteEthPHYMII
+from liteeth.frontend.stream import LiteEthStream2UDPTX
 
 from peripherals.offset_dac import OffsetDAC
 from peripherals.adc import AD1511
@@ -275,53 +277,52 @@ class ScopeSoC(SoCCore):
         self.submodules.adc0 = adc0 = AD1511(self.platform.request("adc", 0), sys_clk_freq)
         self.submodules.adc1 = adc1 = AD1511(self.platform.request("adc", 1), sys_clk_freq)
 
-        # ADC DMA Writer
-        # --------------
+        # ADC DMA
+        # -------
         dram_port = self.sdram.crossbar.get_port()
-        self.submodules.adc0_writer_conv = stream.Converter(64, dram_port.data_width)
-        self.submodules.adc0_writer_dma  = LiteDRAMDMAWriter(dram_port, fifo_depth=1024, with_csr=True)
+        self.submodules.adc0_conv = stream.Converter(64, dram_port.data_width)
+        self.submodules.adc0_dma  = LiteDRAMDMAWriter(dram_port, fifo_depth=1024, with_csr=True)
         self.submodules += stream.Pipeline(
             self.adc0,
-            self.adc0_writer_conv,
-            self.adc0_writer_dma
+            self.adc0_conv,
+            self.adc0_dma
         )
 
-        # ADC DMA Reader
-        # --------------
+        # Upload -----------------------------------------------------------------------------------
+        # DMA Reader
+        # ----------
         dram_port = self.sdram.crossbar.get_port()
-        self.submodules.adc0_reader_dma  = LiteDRAMDMAReader(dram_port, fifo_depth=128, with_csr=True)
-        self.submodules.adc0_reader_conv = stream.Converter(dram_port.data_width, 8)
-        self.submodules += stream.Pipeline(
-            self.adc0_reader_dma,
-            self.adc0_reader_conv
-        )
+        self.submodules.dma_reader      = LiteDRAMDMAReader(dram_port, fifo_depth=128, with_csr=True)
+        self.submodules.dma_reader_conv = stream.Converter(dram_port.data_width, 8)
 
-        # ADC UDP Streamer
-        # -----------------
-        from liteeth.common import convert_ip
-        from liteeth.frontend.stream import LiteEthStream2UDPTX
+        # UDP Streamer
+        # ------------
         udp_port       = self.ethcore.udp.crossbar.get_port(host_udp_port, dw=8)
         udp_streamer   = LiteEthStream2UDPTX(
             ip_address = convert_ip(host_ip),
             udp_port   = host_udp_port,
             fifo_depth = 1024
         )
-        self.submodules.adc0_udp_cdc      = stream.ClockDomainCrossing([("data", 8)], "sys", "eth_tx")
-        self.submodules.adc0_udp_streamer = ClockDomainsRenamer("eth_tx")(udp_streamer)
+        self.submodules.udp_cdc      = stream.ClockDomainCrossing([("data", 8)], "sys", "eth_tx")
+        self.submodules.udp_streamer = ClockDomainsRenamer("eth_tx")(udp_streamer)
+
+        # DMA -> UDP Pipeline
+        # -------------------
         self.submodules += stream.Pipeline(
-            self.adc0_reader_conv,
-            self.adc0_udp_cdc,
-            self.adc0_udp_streamer,
-            udp_port,
+            self.dma_reader,
+            self.dma_reader_conv,
+            self.udp_cdc,
+            self.udp_streamer,
+            udp_port
         )
 
-        # Analyzer
-        # --------
+        # Analyzer ---------------------------------------------------------------------------------
+
         if with_analyzer:
             analyzer_signals = [
-                self.adc0_reader_conv.source,
-                self.adc0_udp_cdc.source,
-                self.adc0_udp_streamer.sink
+                self.dma_reader_conv.source,
+                self.udp_cdc.source,
+                self.udp_streamer.sink
             ]
             self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals,
                 depth        = 1024,
