@@ -154,33 +154,18 @@ adc0_dma = ADCDMA()
 adc0_dma.run(base=0x0000_0000, length=adc_dma_length)
 
 
-if True:
-    print("ADC Data Retrieve (from DRAM)...")
+print("ADC Data Retrieve (from DRAM)...")
 
-    adc_data = []
-    for i in range(adc_dma_length//4):
-        word = bus.read(bus.mems.main_ram.base + 4*i)
-        adc_data.append((word >> 0)  & 0xff)
-        adc_data.append((word >> 8)  & 0xff)
-        adc_data.append((word >> 16) & 0xff)
-        adc_data.append((word >> 24) & 0xff)
+adc_data = []
+for i in range(adc_dma_length//4):
+    word = bus.read(bus.mems.main_ram.base + 4*i)
+    adc_data.append((word >> 0)  & 0xff)
+    adc_data.append((word >> 8)  & 0xff)
+    adc_data.append((word >> 16) & 0xff)
+    adc_data.append((word >> 24) & 0xff)
 
-    print("Plot...")
-    plt.plot(adc_data)
-    plt.show()
-
-else:
-    print("ADC Data Upload (from DRAM over UDP Streamer)...")
-    class ADCUpload:
-        def run(self, base, length):
-            bus.regs.adc0_reader_dma_enable.write(0)
-            bus.regs.adc0_reader_dma_base.write(base)
-            bus.regs.adc0_reader_dma_length.write(length)
-            bus.regs.adc0_reader_dma_enable.write(1)
-            while not (bus.regs.adc0_reader_dma_done.read() & 0x1):
-                print(bus.regs.adc0_reader_dma_offset.read())
-            bus.regs.adc0_reader_dma_enable.write(0)
-    adc0_upload = ADCUpload()
-    adc0_upload.run(base=0x0000_0000, length=adc_dma_length)
+print("Plot...")
+plt.plot(adc_data)
+plt.show()
 
 bus.close()
