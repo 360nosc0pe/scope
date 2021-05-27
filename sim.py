@@ -83,12 +83,12 @@ class ScopeSoC(SoCCore):
         phy_settings = get_sdram_phy_settings(
             memtype    = "DDR3",
             data_width = 32,
-            clk_freq   = int(100e6) # Use 100MHz timings.
+            clk_freq   = sys_clk_freq,
         )
         self.submodules.ddrphy = SDRAMPHYModel(
             module    = dram_module,
             settings  = phy_settings,
-            clk_freq  = int(100e6) # Use 100MHz timings.
+            clk_freq  = sys_clk_freq,
         )
         self.add_sdram("sdram",
             phy              = self.ddrphy,
@@ -115,10 +115,11 @@ class ScopeSoC(SoCCore):
         udp_streamer   = LiteEthStream2UDPTX(
             ip_address = convert_ip(host_ip),
             udp_port   = host_udp_port,
-            fifo_depth = 1024
+            fifo_depth = 1024,
+            send_level = 1024
         )
-        self.submodules.udp_cdc      = stream.ClockDomainCrossing([("data", 8)], "sys", "eth_tx")
-        self.submodules.udp_streamer = ClockDomainsRenamer("eth_tx")(udp_streamer)
+        self.submodules.udp_cdc      = stream.ClockDomainCrossing([("data", 8)], "sys", "eth_rx")
+        self.submodules.udp_streamer = ClockDomainsRenamer("eth_rx")(udp_streamer)
 
         # DMA -> UDP Pipeline
         # -------------------

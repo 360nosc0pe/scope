@@ -281,7 +281,7 @@ class ScopeSoC(SoCCore):
         # -------
         dram_port = self.sdram.crossbar.get_port()
         self.submodules.adc0_conv = stream.Converter(64, dram_port.data_width)
-        self.submodules.adc0_dma  = LiteDRAMDMAWriter(dram_port, fifo_depth=1024, with_csr=True)
+        self.submodules.adc0_dma  = LiteDRAMDMAWriter(dram_port, fifo_depth=16, with_csr=True)
         self.submodules += stream.Pipeline(
             self.adc0,
             self.adc0_conv,
@@ -292,7 +292,7 @@ class ScopeSoC(SoCCore):
         # DMA Reader
         # ----------
         dram_port = self.sdram.crossbar.get_port()
-        self.submodules.dma_reader      = LiteDRAMDMAReader(dram_port, fifo_depth=128, with_csr=True)
+        self.submodules.dma_reader      = LiteDRAMDMAReader(dram_port, fifo_depth=16, with_csr=True)
         self.submodules.dma_reader_conv = stream.Converter(dram_port.data_width, 8)
 
         # UDP Streamer
@@ -301,10 +301,12 @@ class ScopeSoC(SoCCore):
         udp_streamer   = LiteEthStream2UDPTX(
             ip_address = convert_ip(host_ip),
             udp_port   = host_udp_port,
-            fifo_depth = 1024
+            fifo_depth = 1024,
+            send_level = 1024
         )
-        self.submodules.udp_cdc      = stream.ClockDomainCrossing([("data", 8)], "sys", "eth_tx")
-        self.submodules.udp_streamer = ClockDomainsRenamer("eth_tx")(udp_streamer)
+
+        self.submodules.udp_cdc      = stream.ClockDomainCrossing([("data", 8)], "sys", "eth_rx")
+        self.submodules.udp_streamer = ClockDomainsRenamer("eth_rx")(udp_streamer)
 
         # DMA -> UDP Pipeline
         # -------------------
