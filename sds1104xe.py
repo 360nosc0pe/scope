@@ -130,6 +130,7 @@ class ScopeSoC(SoCCore):
             cpu_variant         = "lite", # CPU only used to initialize DDR3 for now, Lite is enough.
             integrated_rom_size = 0x10000,
         )
+        self.uart.add_auto_tx_flush(sys_clk_freq=sys_clk_freq, timeout=1, interval=128)
 
         # DDR3 SDRAM -------------------------------------------------------------------------------
         self.submodules.ddrphy = s7ddrphy.A7DDRPHY(platform.request("ddram"),

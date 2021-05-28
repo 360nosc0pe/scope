@@ -72,6 +72,7 @@ class ScopeSoC(SoCCore):
             cpu_variant         = "lite", # CPU only used to initialize DDR3 for now, Lite is enough.
             integrated_rom_size = 0x10000,
         )
+        self.uart.add_auto_tx_flush(sys_clk_freq=int(1e6), timeout=1e-1, interval=2)
         self.add_constant("CONFIG_DISABLE_DELAYS")
 
         # CRG --------------------------------------------------------------------------------------
