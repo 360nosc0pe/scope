@@ -70,54 +70,63 @@ class SPI:
 
 spi = SPI()
 
-class Clock:
-    def init(self):
-        self.set([0x40, 0x31, 0x20]) # CONTROL
-        self.set([0x04, 0xe1, 0x42]) # NCOUNTER
-        self.set([0x00, 0x07, 0xd1]) # RCOUNTER
+# PLL.
 
-    def set(self, x):
-        spi.write(SPI_CS_PLL, x)
+class PLL:
+    def init(self):
+        self.set_reg(0x40, 0x3120) # Control
+        self.set_reg(0x04, 0xe143) # N-Counter
+        self.set_reg(0x00, 0x0700) # R-Counter.
+
+    def set_reg(self, reg, value):
+        spi.write(SPI_CS_PLL, [reg, (value >> 8) & 0xff, value & 0xff])
+
+# Offset DAC.
 
 class OffsetDAC:
     def init(self):
         bus.regs.offset_dac_control.write(1)
 
-    def set_ch(self, ch, val):
-        getattr(bus.regs, f"offset_dac_ch{ch+1}").write(val)
+    def set_ch(self, n, value):
+        getattr(bus.regs, f"offset_dac_ch{n+1}").write(value)
 
-# frontend init
+# Frontend.
+
 class Frontend:
-    def __init__(self, adc0, adc1, offsetdac):
-        self.adcs = [adc0, adc1]
-        self.offsetdac = offsetdac
-
-    def set_adc_reg(self, adc, reg, value):
-        self.adcs[adc].set_reg(reg, value)
+    def __init__(self, adcs):
+        self.adcs = adcs
 
     def set_frontend(self, data):
         spi.write(SPI_CS_FRONTEND, data)
 
-    def set_vga(self, ch, gain):
-        spi.write(SPI_CS_CH1_VGA + ch, [gain])
+    def set_vga(self, n, gain):
+        assert 0 <= gain <= 255
+        spi.write(SPI_CS_CH1_VGA + n, [gain])
 
     def set_ch1_1v(self):
-        self.set_frontend([0, 0x7A, 0x7A, 0x7A, 0x7E])
-        self.set_vga(0, 0x1F)
-        self.set_adc_reg(0, 0x2B, 00)
+        self.set_frontend([0, 0x7a, 0x7a, 0x7a, 0x7e])
+        self.set_vga(0, 0x1f)
+        self.adcs[0].set_reg(0x2b, 00)
 
     def set_ch1_100mv(self):
-        self.set_frontend([0, 0x7A, 0x7A, 0x7A, 0x78])
+        self.set_frontend([0, 0x7a, 0x7a, 0x7a, 0x7F])
         self.set_vga(0, 0xad)
-        self.set_adc_reg(0, 0x2B, 00)
+        self.adcs[0].set_reg(0x2b, 00)
+
+# ADC.
 
 class ADC:
-    def __init__(self, ch):
-        self.ch = ch
+    def __init__(self, n):
+        self.n       = n
+        self.control = getattr(bus.regs, f"adc{n}_control")
+        self.range   = getattr(bus.regs, f"adc{n}_range")
+        self.count   = getattr(bus.regs, f"adc{n}_count")
 
     def reset(self):
-        bus.regs.adc0_control.write(ADC_CONTROL_FRAME_RST)
-        bus.regs.adc1_control.write(ADC_CONTROL_FRAME_RST)
+        self.control.write(ADC_CONTROL_FRAME_RST)
+
+    def set_reg(self, reg, value):
+        spi.write(SPI_CS_ADC0 + self.n, [reg, (value >> 8) & 0xff, value & 0xff])
 
     def data_mode(self):
         self.set_reg(0, 0x0001)
@@ -138,9 +147,6 @@ class ADC:
         self.set_reg(0x2A, 0x2222)
         self.set_reg(0x25, 0x0000)
         self.set_reg(0x31, 0x0001) # clk_divide = /1, single channel interleaving ADC1..4
-
-    def set_reg(self, reg, value):
-        spi.write(SPI_CS_ADC0 + self.ch, [reg, (value >> 8) & 0xff, (value & 0xff)])
 
     def ramp(self):
         self.set_reg(0x25, 0x0040)
@@ -163,33 +169,33 @@ class ADC:
         self.set_reg(0x45, 1)
 
     def get_range(self, duration=0.5):
-        bus.regs.adc0_control.write(ADC_CONTROL_STAT_RST)
+        self.control.write(ADC_CONTROL_STAT_RST)
         time.sleep(duration)
-        adc_min = (bus.regs.adc0_range.read() >> 0) & 0xff
-        adc_max = (bus.regs.adc0_range.read() >> 8) & 0xff
+        adc_min = (self.range.read() >> 0) & 0xff
+        adc_max = (self.range.read() >> 8) & 0xff
         return adc_min, adc_max
 
     def get_samplerate(self, duration=0.5):
-        bus.regs.adc0_control.write(ADC_CONTROL_STAT_RST)
+        self.control.write(ADC_CONTROL_STAT_RST)
         time.sleep(duration)
-        adc_count = bus.regs.adc0_count.read()
+        adc_count = self.count.read()
         return adc_count/duration
 
-class ADCDMA:
-    def run(self, base, length):
+    def capture(self, base, length):
         bus.regs.adc0_dma_enable.write(0)
         bus.regs.adc0_dma_base.write(base)
         bus.regs.adc0_dma_length.write(length)
         bus.regs.adc0_dma_enable.write(1)
         while not (bus.regs.adc0_dma_done.read() & 0x1):
-            #print(bus.regs.adc0_dma_offset.read())
             pass
+
+# Test ---------------------------------------------------------------------------------------------
 
 adc_dma_length = 0x1000
 
-print("Clock Init...")
-clock = Clock()
-clock.init()
+print("PLL Init...")
+pll = PLL()
+pll.init()
 
 print("OffsetDAC Init...")
 offsetdac = OffsetDAC()
@@ -200,10 +206,10 @@ print("ADC Init...")
 adc0 = ADC(0)
 adc0.reset()
 adc0.data_mode()
-adc0.ramp()
+#adc0.ramp()
 
 print("Frontend Init...")
-frontend = Frontend(adc0, None, offsetdac)
+frontend = Frontend([adc0, None])
 frontend.set_ch1_100mv()
 
 print("ADC Statistics...")
@@ -214,34 +220,37 @@ print(f"- Max: {adc0_max}")
 print(f"- Samplerate: ~{adc0_samplerate/1e6}MSa/s ({adc0_samplerate*8/1e9}Gb/s)")
 
 print("ADC Data Capture (to DRAM)...")
-adc0_dma = ADCDMA()
-adc0_dma.run(base=0x0000_0000, length=adc_dma_length)
-
+adc0.capture(base=0x0000_0000, length=adc_dma_length)
 
 print("ADC Data Retrieve (from DRAM)...")
 adc_data = []
-length   = adc_dma_length
-offset   = 0
-sock     = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.bind(("192.168.1.100", 2000))
 
-while length > 0:
-    bus.regs.dma_reader_enable.write(0)
-    bus.regs.dma_reader_base.write(0x0000_0000 + offset)
-    bus.regs.dma_reader_length.write(1024)
-    bus.regs.dma_reader_enable.write(1)
-    data, _ = sock.recvfrom(1024)
-    for b in data:
-        adc_data.append(b)
-    length -= len(data)
-    offset += len(data)
+def udp_data_retrieve():
+    length   = adc_dma_length
+    offset   = 0
+    sock     = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind(("192.168.1.100", 2000))
+    while length > 0:
+        bus.regs.dma_reader_enable.write(0)
+        bus.regs.dma_reader_base.write(0x0000_0000 + offset)
+        bus.regs.dma_reader_length.write(1024)
+        bus.regs.dma_reader_enable.write(1)
+        data, _ = sock.recvfrom(1024)
+        for b in data:
+            adc_data.append(b)
+        length -= len(data)
+        offset += len(data)
 
-#for i in range(adc_dma_length//4):
-#    word = bus.read(bus.mems.main_ram.base + 4*i)
-#    adc_data.append((word >> 0)  & 0xff)
-#    adc_data.append((word >> 8)  & 0xff)
-#    adc_data.append((word >> 16) & 0xff)
-#    adc_data.append((word >> 24) & 0xff)
+def etherbone_data_retrieve():
+    for i in range(adc_dma_length//4):
+        word = bus.read(bus.mems.main_ram.base + 4*i)
+        adc_data.append((word >> 0)  & 0xff)
+        adc_data.append((word >> 8)  & 0xff)
+        adc_data.append((word >> 16) & 0xff)
+        adc_data.append((word >> 24) & 0xff)
+
+udp_data_retrieve()
+#etherbone_data_retrieve()
 
 print("Plot...")
 plt.plot(adc_data)
