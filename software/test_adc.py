@@ -24,6 +24,7 @@ bus.open()
 
 SPI_CONTROL_START  = (1 << 0)
 SPI_CONTROL_LENGTH = (1 << 8)
+SPI_STATUS_DONE    = (1 << 0)
 
 SPI_CS_PLL      = 0
 SPI_CS_ADC0     = 1
@@ -51,19 +52,29 @@ ADC_RANGE_STAT_MAX    = (1 << 8)
 
 class SPI:
     def write(self, cs, data):
+        assert len(data) <= 6
+        # Convert data to bytes (if not already).
+        data = data if isinstance(data, (bytes, bytearray)) else bytes(data)
+        # Set Chip Select.
         bus.regs.spi_cs.write((1 << cs))
-        d = int.from_bytes(data, byteorder="big")
-        d <<= ((6 - len(data))*8)
-        bus.regs.spi_mosi.write(d)
-        bus.regs.spi_control.write((len(data) * 8)*SPI_CONTROL_LENGTH | SPI_CONTROL_START)
+        # Prepare MOSI data.
+        mosi_bits = len(data)*8
+        mosi_data = int.from_bytes(data, byteorder="big")
+        mosi_data <<= (48 - mosi_bits)
+        bus.regs.spi_mosi.write(mosi_data)
+        # Start SPI Xfer.
+        bus.regs.spi_control.write(mosi_bits*SPI_CONTROL_LENGTH | SPI_CONTROL_START)
+        # Wait SPI Xfer to be done.
+        while not (bus.regs.spi_status.read() & SPI_STATUS_DONE):
+            pass
 
 spi = SPI()
 
 class Clock:
     def init(self):
-        self.set(b"\x40\x31\x20") # CONTROL
-        self.set(b"\x04\xE1\x42") # NCOUNTER
-        self.set(b"\x00\x07\xD1") # RCOUNTER
+        self.set([0x40, 0x31, 0x20]) # CONTROL
+        self.set([0x04, 0xe1, 0x42]) # NCOUNTER
+        self.set([0x00, 0x07, 0xd1]) # RCOUNTER
 
     def set(self, x):
         spi.write(SPI_CS_PLL, x)
@@ -91,12 +102,12 @@ class Frontend:
         spi.write(SPI_CS_CH1_VGA + ch, [gain])
 
     def set_ch1_1v(self):
-        self.set_frontend(bytes([0, 0x7A, 0x7A, 0x7A, 0x7E]))
+        self.set_frontend([0, 0x7A, 0x7A, 0x7A, 0x7E])
         self.set_vga(0, 0x1F)
         self.set_adc_reg(0, 0x2B, 00)
 
     def set_ch1_100mv(self):
-        self.set_frontend(bytes([0, 0x7A, 0x7A, 0x7A, 0x78]))
+        self.set_frontend([0, 0x7A, 0x7A, 0x7A, 0x78])
         self.set_vga(0, 0xad)
         self.set_adc_reg(0, 0x2B, 00)
 

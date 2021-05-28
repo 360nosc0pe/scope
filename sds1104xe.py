@@ -272,7 +272,7 @@ class ScopeSoC(SoCCore):
         # SPI.
         pads = self.platform.request("spi")
         pads.miso = Signal()
-        self.submodules.spi = SPIMaster(pads, 6*8, self.sys_clk_freq, 8e6)
+        self.submodules.spi = SPIMaster(pads, 48, self.sys_clk_freq, 8e6)
 
         # ADCs + DMAs.
         for i in range(2):
