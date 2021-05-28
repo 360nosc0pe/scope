@@ -15,15 +15,15 @@ from litex.soc.interconnect import stream
 
 # Layouts ------------------------------------------------------------------------------------------
 
-ad1511_phy_layout = ["fclk_p", "fclk_n", "lclk_p", "lclk_n", "d_p", "d_n"]
+hmcad1511_phy_layout = ["fclk_p", "fclk_n", "lclk_p", "lclk_n", "d_p", "d_n"]
 
-# AD1511 -------------------------------------------------------------------------------------------
+# HMCAD1511 ----------------------------------------------------------------------------------------
 
-class AD1511(Module, AutoCSR):
+class HMCAD1511(Module, AutoCSR):
     def __init__(self, pads, sys_clk_freq, clock_domain="sys"):
         # Parameters.
         nchannels = len(pads.d_p)
-        for name in ad1511_phy_layout:
+        for name in hmcad1511_phy_layout:
             assert hasattr(pads, name)
 
         # ADC stream.

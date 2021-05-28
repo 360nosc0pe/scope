@@ -32,7 +32,7 @@ from liteeth.phy.mii import LiteEthPHYMII
 from liteeth.frontend.stream import LiteEthStream2UDPTX
 
 from peripherals.offset_dac import OffsetDAC
-from peripherals.adc import AD1511
+from peripherals.adc import HMCAD1511
 
 from peripherals.frontpanel import FrontpanelLeds, FrontpanelButtons
 
@@ -61,7 +61,7 @@ scope_ios = [
         IOStandard("LVCMOS15"),
     ),
 
-    # ADCs (2X AD1511).
+    # ADCs (2X HMCAD1511).
     ("adc", 0,
         Subsignal("lclk_p", Pins("Y9")),  # Bitclock.
         Subsignal("lclk_n", Pins("Y8")),
@@ -179,7 +179,7 @@ class ScopeSoC(SoCCore):
         #
         # Description
         # -----------
-        # The SDS1104X-E is equipped with 2 x 1GSa/s AD1511 8-bit ADDs and has 4 independent
+        # The SDS1104X-E is equipped with 2 x 1GSa/s HMCAD1511 8-bit ADDs and has 4 independent
         # frontends for each channel:
         #                                          SPI
         #                                (PLL/ADC/Frontends config)
@@ -193,7 +193,7 @@ class ScopeSoC(SoCCore):
         #                             │                           │
         #                          ┌──┴───┐      ┌─────┐      ┌───┴──┐
         #                          │ ADC0 │◄─────┤ PLL ├─────►│ ADC1 │
-        #                          │      │      └─────┘      │      │
+        #                          │  HMC │      └─────┘      │  HMC │
         #                       ┌─►│AD1511│◄──┐            ┌─►│AD1511│◄──┐
         #                       │  └──────┘   │            │  └──────┘   │
         #                       │             │            │             │
@@ -276,7 +276,7 @@ class ScopeSoC(SoCCore):
 
         # ADCs + DMAs.
         for i in range(2):
-            adc  = AD1511(self.platform.request("adc", i), sys_clk_freq)
+            adc  = HMCAD1511(self.platform.request("adc", i), sys_clk_freq)
             port = self.sdram.crossbar.get_port()
             conv = stream.Converter(64, port.data_width)
             dma  = LiteDRAMDMAWriter(self.sdram.crossbar.get_port(), fifo_depth=16, with_csr=True)
