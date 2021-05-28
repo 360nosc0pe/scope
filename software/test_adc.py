@@ -15,23 +15,49 @@ import matplotlib.pyplot as plt
 
 from litex import RemoteClient
 
+bus = RemoteClient()
+bus.open()
+
+# Constants ----------------------------------------------------------------------------------------
+
+# SPI.
+
+SPI_CONTROL_START  = (1 << 0)
+SPI_CONTROL_LENGTH = (1 << 8)
+
+SPI_CS_PLL      = 0
+SPI_CS_ADC0     = 1
+SPI_CS_ADC1     = 2
+SPI_CS_FRONTEND = 3
+SPI_CS_CH1_VGA  = 4
+SPI_CS_CH2_VGA  = 5
+SPI_CS_CH3_VGA  = 6
+SPI_CS_CH4_VGA  = 7
+
+# ADC.
+
 ADC_CONTROL_FRAME_RST = (1 << 0)
 ADC_CONTROL_DELAY_RST = (1 << 1)
 ADC_CONTROL_DELAY_INC = (1 << 2)
 ADC_CONTROL_STAT_RST  = (1 << 3)
 
-ADC_RANGE_STAT_MIN = (1 << 0)
-ADC_RANGE_STAT_MAX = (1 << 8)
+ADC_RANGE_STAT_MIN    = (1 << 0)
+ADC_RANGE_STAT_MAX    = (1 << 8)
 
-bus = RemoteClient()
-bus.open()
 
-def spi_write(cs, data):
-    bus.regs.spi_cs.write(1 << cs)
-    d = int.from_bytes(data, byteorder="big")
-    d <<= ((6 - len(data))*8)
-    bus.regs.spi_mosi.write(d)
-    bus.regs.spi_control.write(0x01 | ((len(data) * 8) << 8))
+# Peripherals --------------------------------------------------------------------------------------
+
+# SPI.
+
+class SPI:
+    def write(self, cs, data):
+        bus.regs.spi_cs.write((1 << cs))
+        d = int.from_bytes(data, byteorder="big")
+        d <<= ((6 - len(data))*8)
+        bus.regs.spi_mosi.write(d)
+        bus.regs.spi_control.write((len(data) * 8)*SPI_CONTROL_LENGTH | SPI_CONTROL_START)
+
+spi = SPI()
 
 class Clock:
     def init(self):
@@ -40,7 +66,7 @@ class Clock:
         self.set(b"\x00\x07\xD1") # RCOUNTER
 
     def set(self, x):
-        spi_write(0, x)
+        spi.write(SPI_CS_PLL, x)
 
 class OffsetDAC:
     def init(self):
@@ -59,10 +85,10 @@ class Frontend:
         self.adcs[adc].set_reg(reg, value)
 
     def set_frontend(self, data):
-        spi_write(3, data)
+        spi.write(SPI_CS_FRONTEND, data)
 
     def set_vga(self, ch, gain):
-        spi_write(4 + ch, [gain])
+        spi.write(SPI_CS_CH1_VGA + ch, [gain])
 
     def set_ch1_1v(self):
         self.set_frontend(bytes([0, 0x7A, 0x7A, 0x7A, 0x7E]))
@@ -103,7 +129,7 @@ class ADC:
         self.set_reg(0x31, 0x0001) # clk_divide = /1, single channel interleaving ADC1..4
 
     def set_reg(self, reg, value):
-        spi_write(1 + self.ch, [reg, (value >> 8) & 0xFF, (value & 0xFF)])
+        spi.write(SPI_CS_ADC0 + self.ch, [reg, (value >> 8) & 0xff, (value & 0xff)])
 
     def ramp(self):
         self.set_reg(0x25, 0x0040)
@@ -148,7 +174,7 @@ class ADCDMA:
             #print(bus.regs.adc0_dma_offset.read())
             pass
 
-adc_dma_length = 0x10000
+adc_dma_length = 0x1000
 
 print("Clock Init...")
 clock = Clock()
@@ -163,7 +189,7 @@ print("ADC Init...")
 adc0 = ADC(0)
 adc0.reset()
 adc0.data_mode()
-#adc0.ramp()
+adc0.ramp()
 
 print("Frontend Init...")
 frontend = Frontend(adc0, None, offsetdac)
