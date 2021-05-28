@@ -28,15 +28,20 @@ class HMCAD1511(Module, AutoCSR):
 
         # ADC stream.
         self.source = source = stream.Endpoint([("data", nchannels*8)])
-        source.ready.reset = 1 # Set default value source.ready to 1 (when un-connected).
 
         # Control/Status.
         self._control = CSRStorage(fields=[
-            CSRField("frame_rst", offset=0, size=1, description="Frame clock reset."),
-            CSRField("delay_rst", offset=1, size=1, description="Sampling delay reset."),
-            CSRField("delay_inc", offset=2, size=1, description="Sampling delay increment."),
+            CSRField("frame_rst", offset=0, size=1, pulse=True, description="Frame clock reset."),
+            CSRField("delay_rst", offset=1, size=1, pulse=True, description="Sampling delay reset."),
+            CSRField("delay_inc", offset=2, size=1, pulse=True, description="Sampling delay increment."),
+            CSRField("stat_rst",  offset=3, size=1, pulse=True, description="Statistics reset.")
         ])
         self._status  = CSRStatus() # Unused (for now).
+        self._range   = CSRStatus(fields=[
+            CSRField("min", size=8, offset=0, description="ADC Min value since last stat_rst."),
+            CSRField("max", size=8, offset=8, description="ADC Max value since last stat_rst."),
+        ])
+        self._count   = CSRStatus(32, description="ADC samples count since last stat_rst.")
 
         # # #
 
@@ -186,4 +191,46 @@ class HMCAD1511(Module, AutoCSR):
             cd_to   = clock_domain
         )
         self.comb += self.adc_source.connect(self.cdc.sink)
-        self.comb += self.cdc.source.connect(source)
+        self.comb += self.cdc.source.connect(source, omit={"ready"})
+        self.comb += self.cdc.source.ready.eq(1) # No backpressure allowed.
+
+        # Statistics.
+        # -----------
+
+        # Min/Max Range.
+        adc_min   = self._range.fields.min
+        adc_max   = self._range.fields.max
+        adc_value = source.data[:8]
+        self.sync += [
+            # On a valid cycle:
+            If(source.valid,
+                # Compute Min.
+                If(adc_value >= adc_max,
+                    adc_max.eq(adc_value)
+                ),
+                # Compute Max.
+                If(adc_value <= adc_min,
+                    adc_min.eq(adc_value)
+                )
+            ),
+            # Clear Min/Max.
+            If(self._control.fields.stat_rst,
+                adc_min.eq(0xff),
+                adc_max.eq(0x00)
+            ),
+        ]
+
+        # Samples Count.
+        adc_count = self._count.status
+        self.sync += [
+            # On a valid cycle:
+            If(source.valid,
+                If(adc_count != (2**32-nchannels),
+                    adc_count.eq(adc_count + nchannels)
+                )
+            ),
+            # Clear Count.
+            If(self._control.fields.stat_rst,
+                adc_count.eq(0),
+            ),
+        ]

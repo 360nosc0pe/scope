@@ -15,6 +15,14 @@ import matplotlib.pyplot as plt
 
 from litex import RemoteClient
 
+ADC_CONTROL_FRAME_RST = (1 << 0)
+ADC_CONTROL_DELAY_RST = (1 << 1)
+ADC_CONTROL_DELAY_INC = (1 << 2)
+ADC_CONTROL_STAT_RST  = (1 << 3)
+
+ADC_RANGE_STAT_MIN = (1 << 0)
+ADC_RANGE_STAT_MAX = (1 << 8)
+
 bus = RemoteClient()
 bus.open()
 
@@ -71,10 +79,8 @@ class ADC:
         self.ch = ch
 
     def reset(self):
-        bus.regs.adc0_control.write(1)
-        bus.regs.adc0_control.write(0)
-        bus.regs.adc1_control.write(1)
-        bus.regs.adc1_control.write(0)
+        bus.regs.adc0_control.write(ADC_CONTROL_FRAME_RST)
+        bus.regs.adc1_control.write(ADC_CONTROL_FRAME_RST)
 
     def data_mode(self):
         self.set_reg(0, 0x0001)
@@ -119,6 +125,18 @@ class ADC:
         self.set_reg(0x25, 0x0000)
         self.set_reg(0x45, 1)
 
+    def get_range(self, duration=0.5):
+        bus.regs.adc0_control.write(ADC_CONTROL_STAT_RST)
+        time.sleep(duration)
+        adc_min = (bus.regs.adc0_range.read() >> 0) & 0xff
+        adc_max = (bus.regs.adc0_range.read() >> 8) & 0xff
+        return adc_min, adc_max
+
+    def get_samplerate(self, duration=0.5):
+        bus.regs.adc0_control.write(ADC_CONTROL_STAT_RST)
+        time.sleep(duration)
+        adc_count = bus.regs.adc0_count.read()
+        return adc_count/duration
 
 class ADCDMA:
     def run(self, base, length):
@@ -150,6 +168,13 @@ adc0.data_mode()
 print("Frontend Init...")
 frontend = Frontend(adc0, None, offsetdac)
 frontend.set_ch1_100mv()
+
+print("ADC Statistics...")
+adc0_min, adc0_max = adc0.get_range()
+adc0_samplerate    = adc0.get_samplerate()
+print(f"- Min: {adc0_min}")
+print(f"- Max: {adc0_max}")
+print(f"- Samplerate: ~{adc0_samplerate/1e6}MSa/s ({adc0_samplerate*8/1e9}Gb/s)")
 
 print("ADC Data Capture (to DRAM)...")
 adc0_dma = ADCDMA()
