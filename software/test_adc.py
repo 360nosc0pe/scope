@@ -10,6 +10,7 @@
 # ADC test utility.
 
 import time
+import argparse
 import socket
 import matplotlib.pyplot as plt
 
@@ -56,16 +57,16 @@ class SPI:
         # Convert data to bytes (if not already).
         data = data if isinstance(data, (bytes, bytearray)) else bytes(data)
         # Set Chip Select.
-        bus.regs.spi_cs.write((1 << cs))
+        self.bus.regs.spi_cs.write((1 << cs))
         # Prepare MOSI data.
         mosi_bits = len(data)*8
         mosi_data = int.from_bytes(data, byteorder="big")
         mosi_data <<= (48 - mosi_bits)
-        bus.regs.spi_mosi.write(mosi_data)
+        self.bus.regs.spi_mosi.write(mosi_data)
         # Start SPI Xfer.
-        bus.regs.spi_control.write(mosi_bits*SPI_CONTROL_LENGTH | SPI_CONTROL_START)
+        self.bus.regs.spi_control.write(mosi_bits*SPI_CONTROL_LENGTH | SPI_CONTROL_START)
         # Wait SPI Xfer to be done.
-        while not (bus.regs.spi_status.read() & SPI_STATUS_DONE):
+        while not (self.bus.regs.spi_status.read() & SPI_STATUS_DONE):
             pass
 
 # PLL.
@@ -91,10 +92,10 @@ class OffsetDAC:
         self.spi = spi
 
     def init(self):
-        bus.regs.offset_dac_control.write(1)
+        self.bus.regs.offset_dac_control.write(1)
 
     def set_ch(self, n, value):
-        getattr(bus.regs, f"offset_dac_ch{n+1}").write(value)
+        getattr(self.bus.regs, f"offset_dac_ch{n+1}").write(value)
 
 # Frontend.
 
@@ -199,76 +200,103 @@ class ADC:
         while not (self.bus.regs.adc0_dma_done.read() & 0x1):
             pass
 
-# Test ---------------------------------------------------------------------------------------------
+# ADC Test -----------------------------------------------------------------------------------------
 
-adc_dma_length = 0x1000
+def adc_test(port, channel, length, upload_mode="udp", plot=False): # FIXME: Add more parameters.
+    assert channel == 1 # FIXME
+    bus = RemoteClient(port=port)
+    bus.open()
 
-bus = RemoteClient()
-bus.open()
+    spi = SPI(bus)
 
-spi = SPI(bus)
+    print("PLL Init...")
+    pll = PLL(bus, spi)
+    pll.init()
 
-print("PLL Init...")
-pll = PLL(bus, spi)
-pll.init()
+    print("OffsetDAC Init...")
+    offsetdac = OffsetDAC(bus, spi)
+    offsetdac.init()
+    offsetdac.set_ch(0, 0x2600)
 
-print("OffsetDAC Init...")
-offsetdac = OffsetDAC(bus, spi)
-offsetdac.init()
-offsetdac.set_ch(0, 0x2600)
+    print("ADC Init...")
+    adc0 = ADC(bus, spi, n=0)
+    adc0.reset()
+    adc0.data_mode()
+    #adc0.ramp()
 
-print("ADC Init...")
-adc0 = ADC(bus, spi, n=0)
-adc0.reset()
-adc0.data_mode()
-#adc0.ramp()
+    print("Frontend Init...")
+    frontend = Frontend(bus, spi, [adc0, None])
+    frontend.set_ch1_100mv()
 
-print("Frontend Init...")
-frontend = Frontend(bus, spi, [adc0, None])
-frontend.set_ch1_100mv()
+    print("ADC Statistics...")
+    adc0_min, adc0_max = adc0.get_range()
+    adc0_samplerate    = adc0.get_samplerate()
+    print(f"- Min: {adc0_min}")
+    print(f"- Max: {adc0_max}")
+    print(f"- Samplerate: ~{adc0_samplerate/1e6}MSa/s ({adc0_samplerate*8/1e9}Gb/s)")
 
-print("ADC Statistics...")
-adc0_min, adc0_max = adc0.get_range()
-adc0_samplerate    = adc0.get_samplerate()
-print(f"- Min: {adc0_min}")
-print(f"- Max: {adc0_max}")
-print(f"- Samplerate: ~{adc0_samplerate/1e6}MSa/s ({adc0_samplerate*8/1e9}Gb/s)")
+    print("ADC Data Capture (to DRAM)...")
+    adc0.capture(base=0x0000_0000, length=length)
 
-print("ADC Data Capture (to DRAM)...")
-adc0.capture(base=0x0000_0000, length=adc_dma_length)
+    print("ADC Data Retrieve (from DRAM)...")
+    adc_data = []
 
-print("ADC Data Retrieve (from DRAM)...")
-adc_data = []
+    def udp_data_retrieve(length):
+        offset   = 0
+        sock     = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind(("192.168.1.100", 2000))
+        while length > 0:
+            bus.regs.dma_reader_enable.write(0)
+            bus.regs.dma_reader_base.write(0x0000_0000 + offset)
+            bus.regs.dma_reader_length.write(1024)
+            bus.regs.dma_reader_enable.write(1)
+            data, _ = sock.recvfrom(1024)
+            for b in data:
+                adc_data.append(b)
+            length -= len(data)
+            offset += len(data)
 
-def udp_data_retrieve():
-    length   = adc_dma_length
-    offset   = 0
-    sock     = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind(("192.168.1.100", 2000))
-    while length > 0:
-        bus.regs.dma_reader_enable.write(0)
-        bus.regs.dma_reader_base.write(0x0000_0000 + offset)
-        bus.regs.dma_reader_length.write(1024)
-        bus.regs.dma_reader_enable.write(1)
-        data, _ = sock.recvfrom(1024)
-        for b in data:
-            adc_data.append(b)
-        length -= len(data)
-        offset += len(data)
+    def etherbone_data_retrieve(length):
+        for i in range(length//4):
+            word = bus.read(bus.mems.main_ram.base + 4*i)
+            adc_data.append((word >> 0)  & 0xff)
+            adc_data.append((word >> 8)  & 0xff)
+            adc_data.append((word >> 16) & 0xff)
+            adc_data.append((word >> 24) & 0xff)
 
-def etherbone_data_retrieve():
-    for i in range(adc_dma_length//4):
-        word = bus.read(bus.mems.main_ram.base + 4*i)
-        adc_data.append((word >> 0)  & 0xff)
-        adc_data.append((word >> 8)  & 0xff)
-        adc_data.append((word >> 16) & 0xff)
-        adc_data.append((word >> 24) & 0xff)
+    if upload_mode == "udp":
+        udp_data_retrieve(length)
+    elif upload_mode == "etherbone":
+        etherbone_data_retrieve(length)
+    else:
+        raise ValueError
 
-udp_data_retrieve()
-#etherbone_data_retrieve()
+    if plot:
+        print("Plot...")
+        plt.plot(adc_data)
+        plt.show()
 
-print("Plot...")
-plt.plot(adc_data)
-plt.show()
+    bus.close()
 
-bus.close()
+# Run ----------------------------------------------------------------------------------------------
+
+def main():
+    parser = argparse.ArgumentParser(description="ADC test utility")
+    parser.add_argument("--port",        default="1234",           help="Host bind port")
+    parser.add_argument("--channel",     default=1,      type=int, help="ADC Channel: 1 (default), 2, 3, or 4.")
+    parser.add_argument("--length",      default=1000,   type=int, help="ADC Capture Length (in Samples).")
+    parser.add_argument("--upload-mode", default="udp",            help="Data upload mode: udp or etherbone.")
+    parser.add_argument("--plot",        action="store_true",      help="Plot Data.")
+    args = parser.parse_args()
+
+    port = int(args.port, 0)
+
+    adc_test(port=port,
+        channel     = args.channel,
+        length      = args.length,
+        upload_mode = args.upload_mode,
+        plot        = args.plot
+    )
+
+if __name__ == "__main__":
+    main()
