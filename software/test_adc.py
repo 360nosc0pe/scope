@@ -104,21 +104,23 @@ class Frontend:
         self.bus  = bus
         self.spi  = spi
         self.adcs = adcs
+        self.frontend_values = [0x7a, 0x7a, 0x7a, 0x7a]
 
-    def set_frontend(self, data):
-        self.spi.write(SPI_CS_FRONTEND, data)
+    def set_frontend(self, n, data):
+        self.frontend_values[4-1-n] = data
+        self.spi.write(SPI_CS_FRONTEND, [0x00] + self.frontend_values)
 
     def set_vga(self, n, gain):
         assert 0 <= gain <= 255
         self.spi.write(SPI_CS_CH1_VGA + n, [gain])
 
     def set_ch1_1v(self):
-        self.set_frontend([0, 0x7a, 0x7a, 0x7a, 0x7e])
+        self.set_frontend(0, 0x7e)
         self.set_vga(0, 0x1f)
         self.adcs[0].set_reg(0x2b, 00)
 
     def set_ch1_100mv(self):
-        self.set_frontend([0, 0x7a, 0x7a, 0x7a, 0x78])
+        self.set_frontend(0, 0x78)
         self.set_vga(0, 0xad)
         self.adcs[0].set_reg(0x2b, 00)
 
