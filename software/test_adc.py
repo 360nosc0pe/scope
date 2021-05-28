@@ -15,9 +15,6 @@ import matplotlib.pyplot as plt
 
 from litex import RemoteClient
 
-bus = RemoteClient()
-bus.open()
-
 # Constants ----------------------------------------------------------------------------------------
 
 # SPI.
@@ -51,6 +48,9 @@ ADC_RANGE_STAT_MAX    = (1 << 8)
 # SPI.
 
 class SPI:
+    def __init__(self, bus):
+        self.bus = bus
+
     def write(self, cs, data):
         assert len(data) <= 6
         # Convert data to bytes (if not already).
@@ -68,22 +68,28 @@ class SPI:
         while not (bus.regs.spi_status.read() & SPI_STATUS_DONE):
             pass
 
-spi = SPI()
-
 # PLL.
 
 class PLL:
+    def __init__(self, bus, spi):
+        self.bus = bus
+        self.spi = spi
+
     def init(self):
         self.set_reg(0x40, 0x3120) # Control
         self.set_reg(0x04, 0xe143) # N-Counter
         self.set_reg(0x00, 0x0700) # R-Counter.
 
     def set_reg(self, reg, value):
-        spi.write(SPI_CS_PLL, [reg, (value >> 8) & 0xff, value & 0xff])
+        self.spi.write(SPI_CS_PLL, [reg, (value >> 8) & 0xff, value & 0xff])
 
 # Offset DAC.
 
 class OffsetDAC:
+    def __init__(self, bus, spi):
+        self.bus = bus
+        self.spi = spi
+
     def init(self):
         bus.regs.offset_dac_control.write(1)
 
@@ -93,15 +99,17 @@ class OffsetDAC:
 # Frontend.
 
 class Frontend:
-    def __init__(self, adcs):
+    def __init__(self, bus, spi, adcs):
+        self.bus  = bus
+        self.spi  = spi
         self.adcs = adcs
 
     def set_frontend(self, data):
-        spi.write(SPI_CS_FRONTEND, data)
+        self.spi.write(SPI_CS_FRONTEND, data)
 
     def set_vga(self, n, gain):
         assert 0 <= gain <= 255
-        spi.write(SPI_CS_CH1_VGA + n, [gain])
+        self.spi.write(SPI_CS_CH1_VGA + n, [gain])
 
     def set_ch1_1v(self):
         self.set_frontend([0, 0x7a, 0x7a, 0x7a, 0x7e])
@@ -109,14 +117,16 @@ class Frontend:
         self.adcs[0].set_reg(0x2b, 00)
 
     def set_ch1_100mv(self):
-        self.set_frontend([0, 0x7a, 0x7a, 0x7a, 0x7F])
+        self.set_frontend([0, 0x7a, 0x7a, 0x7a, 0x78])
         self.set_vga(0, 0xad)
         self.adcs[0].set_reg(0x2b, 00)
 
 # ADC.
 
 class ADC:
-    def __init__(self, n):
+    def __init__(self, bus, spi, n):
+        self.bus     = bus
+        self.spi     = spi
         self.n       = n
         self.control = getattr(bus.regs, f"adc{n}_control")
         self.range   = getattr(bus.regs, f"adc{n}_range")
@@ -126,7 +136,7 @@ class ADC:
         self.control.write(ADC_CONTROL_FRAME_RST)
 
     def set_reg(self, reg, value):
-        spi.write(SPI_CS_ADC0 + self.n, [reg, (value >> 8) & 0xff, value & 0xff])
+        self.spi.write(SPI_CS_ADC0 + self.n, [reg, (value >> 8) & 0xff, value & 0xff])
 
     def data_mode(self):
         self.set_reg(0, 0x0001)
@@ -182,34 +192,39 @@ class ADC:
         return adc_count/duration
 
     def capture(self, base, length):
-        bus.regs.adc0_dma_enable.write(0)
-        bus.regs.adc0_dma_base.write(base)
-        bus.regs.adc0_dma_length.write(length)
-        bus.regs.adc0_dma_enable.write(1)
-        while not (bus.regs.adc0_dma_done.read() & 0x1):
+        self.bus.regs.adc0_dma_enable.write(0)
+        self.bus.regs.adc0_dma_base.write(base)
+        self.bus.regs.adc0_dma_length.write(length)
+        self.bus.regs.adc0_dma_enable.write(1)
+        while not (self.bus.regs.adc0_dma_done.read() & 0x1):
             pass
 
 # Test ---------------------------------------------------------------------------------------------
 
 adc_dma_length = 0x1000
 
+bus = RemoteClient()
+bus.open()
+
+spi = SPI(bus)
+
 print("PLL Init...")
-pll = PLL()
+pll = PLL(bus, spi)
 pll.init()
 
 print("OffsetDAC Init...")
-offsetdac = OffsetDAC()
+offsetdac = OffsetDAC(bus, spi)
 offsetdac.init()
 offsetdac.set_ch(0, 0x2600)
 
 print("ADC Init...")
-adc0 = ADC(0)
+adc0 = ADC(bus, spi, n=0)
 adc0.reset()
 adc0.data_mode()
 #adc0.ramp()
 
 print("Frontend Init...")
-frontend = Frontend([adc0, None])
+frontend = Frontend(bus, spi, [adc0, None])
 frontend.set_ch1_100mv()
 
 print("ADC Statistics...")
