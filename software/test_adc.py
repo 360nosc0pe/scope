@@ -16,22 +16,10 @@ import matplotlib.pyplot as plt
 
 from litex import RemoteClient
 
+from spi import *
+from adf4360 import ADF4360
+
 # Constants ----------------------------------------------------------------------------------------
-
-# SPI.
-
-SPI_CONTROL_START  = (1 << 0)
-SPI_CONTROL_LENGTH = (1 << 8)
-SPI_STATUS_DONE    = (1 << 0)
-
-SPI_CS_PLL      = 0
-SPI_CS_ADC0     = 1
-SPI_CS_ADC1     = 2
-SPI_CS_FRONTEND = 3
-SPI_CS_CH1_VGA  = 4
-SPI_CS_CH2_VGA  = 5
-SPI_CS_CH3_VGA  = 6
-SPI_CS_CH4_VGA  = 7
 
 # ADC.
 
@@ -43,46 +31,7 @@ ADC_CONTROL_STAT_RST  = (1 << 3)
 ADC_RANGE_STAT_MIN    = (1 << 0)
 ADC_RANGE_STAT_MAX    = (1 << 8)
 
-
 # Peripherals --------------------------------------------------------------------------------------
-
-# SPI.
-
-class SPI:
-    def __init__(self, bus):
-        self.bus = bus
-
-    def write(self, cs, data):
-        assert len(data) <= 6
-        # Convert data to bytes (if not already).
-        data = data if isinstance(data, (bytes, bytearray)) else bytes(data)
-        # Set Chip Select.
-        self.bus.regs.spi_cs.write((1 << cs))
-        # Prepare MOSI data.
-        mosi_bits = len(data)*8
-        mosi_data = int.from_bytes(data, byteorder="big")
-        mosi_data <<= (48 - mosi_bits)
-        self.bus.regs.spi_mosi.write(mosi_data)
-        # Start SPI Xfer.
-        self.bus.regs.spi_control.write(mosi_bits*SPI_CONTROL_LENGTH | SPI_CONTROL_START)
-        # Wait SPI Xfer to be done.
-        while not (self.bus.regs.spi_status.read() & SPI_STATUS_DONE):
-            pass
-
-# PLL.
-
-class PLL:
-    def __init__(self, bus, spi):
-        self.bus = bus
-        self.spi = spi
-
-    def init(self):
-        self.set_reg(0x40, 0x3120) # Control
-        self.set_reg(0x04, 0xe143) # N-Counter
-        self.set_reg(0x00, 0x0700) # R-Counter.
-
-    def set_reg(self, reg, value):
-        self.spi.write(SPI_CS_PLL, [reg, (value >> 8) & 0xff, value & 0xff])
 
 # Offset DAC.
 
@@ -212,8 +161,12 @@ def adc_test(port, channel, length, upload_mode="udp", plot=False): # FIXME: Add
     spi = SPI(bus)
 
     print("PLL Init...")
-    pll = PLL(bus, spi)
-    pll.init()
+    pll = ADF4360(bus, spi)
+    pll.init(
+        control_value   = 0x403120,
+        r_counter_value = 0x0007d1,
+        n_counter_value = 0x04e142,
+    )
 
     print("OffsetDAC Init...")
     offsetdac = OffsetDAC(bus, spi)
