@@ -64,7 +64,7 @@ $ litex_server.py --udp --udp-ip 192.168.1.50
 [> Configure scope hardware and capture samples from CH1
 -----------
 ```sh
-$ ./software/test_adc.py
+$ ./software/test_adc.py --length=10000 --auto-setup --plot
 $ litescope_cli.py
 $ gtkwave dump.vcd
 ```
