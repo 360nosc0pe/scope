@@ -21,6 +21,21 @@ from adf4360 import ADF4360
 
 # Constants ----------------------------------------------------------------------------------------
 
+# Frontend.
+
+FRONTEND_10_1_FIRST_DIVIDER  = (1 << 1)
+FRONTEND_10_1_SECOND_DIVIDER = (1 << 2)
+FRONTEND_AC_COUPLING         = (0 << 3)
+FRONTEND_DC_COUPLING         = (1 << 3)
+FRONTEND_VGA_ENABLE          = (1 << 4)
+FRONTEND_20MHZ_BANDWIDTH     = (0 << 5)
+FRONTEND_FULL_BANDWIDTH      = (1 << 5)
+
+# VGA.
+
+VGA_LOW_RANGE  = (0 << 7)
+VGA_HIGH_RANGE = (1 << 7)
+
 # ADC.
 
 ADC_CONTROL_FRAME_RST = (1 << 0)
@@ -66,12 +81,12 @@ class Frontend:
     def set_ch1_1v(self):
         self.set_frontend(0, 0x7e)
         self.set_vga(0, 0x1f)
-        self.adcs[0].set_reg(0x2b, 00)
+        self.adcs[0].set_reg(0x2b, 0x00)
 
     def set_ch1_100mv(self):
         self.set_frontend(0, 0x78)
         self.set_vga(0, 0xad)
-        self.adcs[0].set_reg(0x2b, 00)
+        self.adcs[0].set_reg(0x2b, 0x00)
 
 # ADC.
 
@@ -105,7 +120,7 @@ class ADC:
         self.set_reg(0x3A, 0x0202)
         self.set_reg(0x3B, 0x0202)
         self.set_reg(0x33, 0x0001)
-        self.set_reg(0x2B, 0x0222)
+        #self.set_reg(0x2B, 0x0222)
         self.set_reg(0x2A, 0x2222)
         self.set_reg(0x25, 0x0000)
         self.set_reg(0x31, 0x0001) # clk_divide = /1, single channel interleaving ADC1..4
@@ -146,14 +161,14 @@ class ADC:
     def capture(self, base, length):
         self.bus.regs.adc0_dma_enable.write(0)
         self.bus.regs.adc0_dma_base.write(base)
-        self.bus.regs.adc0_dma_length.write(length)
+        self.bus.regs.adc0_dma_length.write(length + 1024) # FIXME: +1024.
         self.bus.regs.adc0_dma_enable.write(1)
         while not (self.bus.regs.adc0_dma_done.read() & 0x1):
             pass
 
 # ADC Test -----------------------------------------------------------------------------------------
 
-def adc_test(port, channel, length, upload_mode="udp", plot=False): # FIXME: Add more parameters.
+def adc_test(port, channel, length, auto_setup, ramp=False, upload_mode="udp", plot=False): # FIXME: Add more parameters.
     assert channel == 1 # FIXME
     bus = RemoteClient(port=port)
     bus.open()
@@ -171,17 +186,60 @@ def adc_test(port, channel, length, upload_mode="udp", plot=False): # FIXME: Add
     print("OffsetDAC Init...")
     offsetdac = OffsetDAC(bus, spi)
     offsetdac.init()
-    offsetdac.set_ch(0, 0x2600)
 
     print("ADC Init...")
     adc0 = ADC(bus, spi, n=0)
     adc0.reset()
-    adc0.data_mode()
-    #adc0.ramp()
+    if ramp:
+        adc0.ramp()
+    else:
+        adc0.data_mode()
 
     print("Frontend Init...")
     frontend = Frontend(bus, spi, [adc0, None])
-    frontend.set_ch1_100mv()
+
+    if auto_setup:
+        def ch1_auto_setup(): # FIXME: Very dumb Auto-Setup test, mostly to verify Frontend/Gains are behaving correctly, improve.
+            print("Setting CH1 Frontend/Gain to default values...")
+            frontend.set_frontend(0, 0x40 | FRONTEND_FULL_BANDWIDTH | FRONTEND_VGA_ENABLE | FRONTEND_AC_COUPLING | FRONTEND_10_1_FIRST_DIVIDER | FRONTEND_10_1_SECOND_DIVIDER)
+            adc0.set_reg(0x2b, 0x00)                  # 1X ADC Gain.
+            frontend.set_vga(0, VGA_LOW_RANGE | 0x40) # Low VGA Gain to see Data but avoid saturation.
+
+            # 2 loops to improve precision.
+            for loop in range(2):
+                print(f"Centering ADC Data through OffsetDAC... (loop: {loop})")
+                best_offset = 0
+                best_error  = 0xff
+                for offset in range(0x2400, 0x2800, 8):
+                    offsetdac.set_ch(0, offset)
+                    _min, _max = adc0.get_range(duration=0.01)
+                    _mean = _min + (_max - _min)/2
+                    error = abs(_mean - 0xff/2)
+                    if error < best_error:
+                        best_error  = error
+                        best_offset = offset
+                        print(f"OffsetDAC Current: 0x{offset:x} Best: 0x{best_offset:x} (ADC Min:{_min} Max: {_max} Mean: {_mean})")
+                offsetdac.set_ch(0, best_offset)
+
+                print(f"Adjusting ADC Dynamic with through VGA... (loop: {loop})")
+                sat_margin      = 0x20
+                best_gain_range = VGA_LOW_RANGE
+                best_gain       = 0
+                best_dynamic    = 0
+                for gain_range in [VGA_LOW_RANGE, VGA_HIGH_RANGE]:
+                    for gain in range(0x00, 0x80, 8):
+                        frontend.set_vga(0, gain_range | gain)
+                        _min, _max = adc0.get_range(duration=0.01)
+                        _dynamic = (_max - _min)
+                        gain_range_str = "VGA_LOW_RANGE" if gain_range == VGA_LOW_RANGE else "VGA_HIGH_RANGE"
+                        if (_min > sat_margin) and (_max < (0xff - sat_margin)):
+                            if (_dynamic > best_dynamic):
+                                best_gain_range = gain_range
+                                best_gain       = best_gain
+                                best_dynamic    = _dynamic
+                                print(f"VGA Gain Range: {gain_range_str} Current: 0x{gain:x} Best: 0x{0} (ADC Min:{_min} Max: {_max} Diff: {_dynamic})")
+
+        ch1_auto_setup()
 
     print("ADC Statistics...")
     adc0_min, adc0_max = adc0.get_range()
@@ -226,6 +284,9 @@ def adc_test(port, channel, length, upload_mode="udp", plot=False): # FIXME: Add
     else:
         raise ValueError
 
+    if len(adc_data) > length:
+        adc_data = adc_data[:length]
+
     if plot:
         print("Plot...")
         plt.plot(adc_data)
@@ -240,6 +301,8 @@ def main():
     parser.add_argument("--port",        default="1234",           help="Host bind port")
     parser.add_argument("--channel",     default=1,      type=int, help="ADC Channel: 1 (default), 2, 3, or 4.")
     parser.add_argument("--length",      default=1000,   type=int, help="ADC Capture Length (in Samples).")
+    parser.add_argument("--ramp",        action="store_true",      help="Set ADC to Ramp mode.")
+    parser.add_argument("--auto-setup",  action="store_true",      help="Run Frontend/Gain Auto-Setup.")
     parser.add_argument("--upload-mode", default="udp",            help="Data upload mode: udp or etherbone.")
     parser.add_argument("--plot",        action="store_true",      help="Plot Data.")
     args = parser.parse_args()
@@ -249,6 +312,8 @@ def main():
     adc_test(port=port,
         channel     = args.channel,
         length      = args.length,
+        auto_setup  = args.auto_setup,
+        ramp        = args.ramp,
         upload_mode = args.upload_mode,
         plot        = args.plot
     )
