@@ -95,9 +95,10 @@ class ADC:
         self.bus     = bus
         self.spi     = spi
         self.n       = n
-        self.control = getattr(bus.regs, f"adc{n}_control")
-        self.range   = getattr(bus.regs, f"adc{n}_range")
-        self.count   = getattr(bus.regs, f"adc{n}_count")
+        self.control      = getattr(bus.regs, f"adc{n}_control")
+        self.downsampling = getattr(bus.regs, f"adc{n}_downsampling")
+        self.range        = getattr(bus.regs, f"adc{n}_range")
+        self.count        = getattr(bus.regs, f"adc{n}_count")
 
     def reset(self):
         self.control.write(ADC_CONTROL_FRAME_RST)
@@ -168,7 +169,7 @@ class ADC:
 
 # ADC Test -----------------------------------------------------------------------------------------
 
-def adc_test(port, channel, length, auto_setup, ramp=False, upload_mode="udp", csv="", plot=False): # FIXME: Add more parameters.
+def adc_test(port, channel, length, downsampling, auto_setup, ramp=False, upload_mode="udp", csv="", plot=False): # FIXME: Add more parameters.
     assert channel == 1 # FIXME
     bus = RemoteClient(port=port)
     bus.open()
@@ -192,6 +193,7 @@ def adc_test(port, channel, length, auto_setup, ramp=False, upload_mode="udp", c
     print("ADC Init...")
     adc0 = ADC(bus, spi, n=0)
     adc0.reset()
+    adc0.downsampling.write(downsampling)
     if ramp:
         adc0.ramp()
     else:
@@ -209,7 +211,7 @@ def adc_test(port, channel, length, auto_setup, ramp=False, upload_mode="udp", c
     frontend = Frontend(bus, spi, [adc0, None])
 
     if auto_setup:
-        def ch1_auto_setup(debug=False): # FIXME: Very dumb Auto-Setup test, mostly to verify Frontend/Gains are behaving correctly, improve.
+        def ch1_auto_setup(debug=True): # FIXME: Very dumb Auto-Setup test, mostly to verify Frontend/Gains are behaving correctly, improve.
             print("Setting CH1 Frontend/Gain to default values...")
             frontend.set_frontend(0, FRONTEND_FULL_BANDWIDTH | FRONTEND_VGA_ENABLE | FRONTEND_DC_COUPLING | FRONTEND_10_1_FIRST_DIVIDER | FRONTEND_10_1_SECOND_DIVIDER)
             adc0.set_reg(0x2b, 0x00)                  # 1X ADC Gain.
@@ -332,26 +334,28 @@ def adc_test(port, channel, length, auto_setup, ramp=False, upload_mode="udp", c
 
 def main():
     parser = argparse.ArgumentParser(description="ADC test utility")
-    parser.add_argument("--port",        default="1234",           help="Host bind port")
-    parser.add_argument("--channel",     default=1,      type=int, help="ADC Channel: 1 (default), 2, 3, or 4.")
-    parser.add_argument("--length",      default=1000,   type=int, help="ADC Capture Length (in Samples).")
-    parser.add_argument("--ramp",        action="store_true",      help="Set ADC to Ramp mode.")
-    parser.add_argument("--auto-setup",  action="store_true",      help="Run Frontend/Gain Auto-Setup.")
-    parser.add_argument("--upload-mode", default="udp",            help="Data upload mode: udp or etherbone.")
-    parser.add_argument("--csv",         default="",               help="CSV Dump file.")
-    parser.add_argument("--plot",        action="store_true",      help="Plot Data.")
+    parser.add_argument("--port",         default="1234",           help="Host bind port")
+    parser.add_argument("--channel",      default=1,      type=int, help="ADC Channel: 1 (default), 2, 3, or 4.")
+    parser.add_argument("--length",       default=1000,   type=int, help="ADC Capture Length (in Samples).")
+    parser.add_argument("--downsampling", default=1,      type=int, help="ADC DownSampling (in Samples).")
+    parser.add_argument("--ramp",         action="store_true",      help="Set ADC to Ramp mode.")
+    parser.add_argument("--auto-setup",   action="store_true",      help="Run Frontend/Gain Auto-Setup.")
+    parser.add_argument("--upload-mode",  default="udp",            help="Data upload mode: udp or etherbone.")
+    parser.add_argument("--csv",          default="",               help="CSV Dump file.")
+    parser.add_argument("--plot",         action="store_true",      help="Plot Data.")
     args = parser.parse_args()
 
     port = int(args.port, 0)
 
     adc_test(port=port,
-        channel     = args.channel,
-        length      = args.length,
-        auto_setup  = args.auto_setup,
-        ramp        = args.ramp,
-        upload_mode = args.upload_mode,
-        csv         = args.csv,
-        plot        = args.plot
+        channel      = args.channel,
+        length       = args.length,
+        downsampling = args.downsampling,
+        auto_setup   = args.auto_setup,
+        ramp         = args.ramp,
+        upload_mode  = args.upload_mode,
+        csv          = args.csv,
+        plot         = args.plot
     )
 
 if __name__ == "__main__":
