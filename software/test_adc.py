@@ -168,12 +168,15 @@ class ADC:
 
 # ADC Test -----------------------------------------------------------------------------------------
 
-def adc_test(port, channel, length, auto_setup, ramp=False, upload_mode="udp", plot=False): # FIXME: Add more parameters.
+def adc_test(port, channel, length, auto_setup, ramp=False, upload_mode="udp", csv="", plot=False): # FIXME: Add more parameters.
     assert channel == 1 # FIXME
     bus = RemoteClient(port=port)
     bus.open()
 
     spi = SPI(bus)
+
+    # PLL Init
+    # --------
 
     print("PLL Init...")
     pll = ADF4360(bus, spi)
@@ -183,9 +186,8 @@ def adc_test(port, channel, length, auto_setup, ramp=False, upload_mode="udp", p
         n_counter_value = 0x04e142,
     )
 
-    print("OffsetDAC Init...")
-    offsetdac = OffsetDAC(bus, spi)
-    offsetdac.init()
+    # ADC Init
+    # --------
 
     print("ADC Init...")
     adc0 = ADC(bus, spi, n=0)
@@ -194,6 +196,14 @@ def adc_test(port, channel, length, auto_setup, ramp=False, upload_mode="udp", p
         adc0.ramp()
     else:
         adc0.data_mode()
+
+    # Offset DAC / Frontend Init
+    # --------------------------
+
+    print("OffsetDAC Init...")
+    offsetdac = OffsetDAC(bus, spi)
+    offsetdac.init()
+
 
     print("Frontend Init...")
     frontend = Frontend(bus, spi, [adc0, None])
@@ -244,6 +254,10 @@ def adc_test(port, channel, length, auto_setup, ramp=False, upload_mode="udp", p
 
         ch1_auto_setup()
 
+
+    # ADC Statistics / Capture
+    # ------------------------
+
     print("ADC Statistics...")
     adc0_min, adc0_max = adc0.get_range()
     adc0_samplerate    = adc0.get_samplerate()
@@ -290,6 +304,23 @@ def adc_test(port, channel, length, auto_setup, ramp=False, upload_mode="udp", p
     if len(adc_data) > length:
         adc_data = adc_data[:length]
 
+
+    # CSV Export
+    # ----------
+
+    if csv != "":
+        f = open(csv, "w")
+        f.write("Time; ADC0\n")
+        for n, d in enumerate(adc_data):
+            # FIXME: Use , as decimal point and ; as separator due to scopehal limitation.
+            # https://github.com/azonenberg/scopehal/issues/494
+            line = f"{n/adc0_samplerate}; {d:f}\n"
+            line = line.replace(".", ",")
+            f.write(line)
+        f.close()
+
+    # Plot
+    # ----
     if plot:
         print("Plot...")
         plt.plot(adc_data)
@@ -307,6 +338,7 @@ def main():
     parser.add_argument("--ramp",        action="store_true",      help="Set ADC to Ramp mode.")
     parser.add_argument("--auto-setup",  action="store_true",      help="Run Frontend/Gain Auto-Setup.")
     parser.add_argument("--upload-mode", default="udp",            help="Data upload mode: udp or etherbone.")
+    parser.add_argument("--csv",         default="",               help="CSV Dump file.")
     parser.add_argument("--plot",        action="store_true",      help="Plot Data.")
     args = parser.parse_args()
 
@@ -318,6 +350,7 @@ def main():
         auto_setup  = args.auto_setup,
         ramp        = args.ramp,
         upload_mode = args.upload_mode,
+        csv         = args.csv,
         plot        = args.plot
     )
 
