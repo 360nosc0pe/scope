@@ -169,7 +169,7 @@ class ADC:
 
 # ADC Test -----------------------------------------------------------------------------------------
 
-def adc_test(port, channel, length, downsampling, auto_setup, ramp=False, upload_mode="udp", csv="", plot=False): # FIXME: Add more parameters.
+def adc_test(port, channel, length, downsampling, div, auto_setup, ramp=False, upload_mode="udp", csv="", plot=False): # FIXME: Add more parameters.
     assert channel == 1 # FIXME
     bus = RemoteClient(port=port)
     bus.open()
@@ -213,7 +213,13 @@ def adc_test(port, channel, length, downsampling, auto_setup, ramp=False, upload
     if auto_setup:
         def ch1_auto_setup(debug=True): # FIXME: Very dumb Auto-Setup test, mostly to verify Frontend/Gains are behaving correctly, improve.
             print("Setting CH1 Frontend/Gain to default values...")
-            frontend.set_frontend(0, FRONTEND_FULL_BANDWIDTH | FRONTEND_VGA_ENABLE | FRONTEND_DC_COUPLING | FRONTEND_10_1_FIRST_DIVIDER | FRONTEND_10_1_SECOND_DIVIDER)
+            frontend_value = FRONTEND_FULL_BANDWIDTH | FRONTEND_VGA_ENABLE | FRONTEND_DC_COUPLING
+            assert div in ["100:1", "10:1", "1:1"]
+            if div == "100:1":
+                frontend_value |= FRONTEND_10_1_FIRST_DIVIDER | FRONTEND_10_1_SECOND_DIVIDER
+            if div == "10:1":
+                frontend_value |= FRONTEND_10_1_FIRST_DIVIDER
+            frontend.set_frontend(0, frontend_value)
             adc0.set_reg(0x2b, 0x00)                  # 1X ADC Gain.
             frontend.set_vga(0, VGA_LOW_RANGE | 0x40) # Low VGA Gain to see Data but avoid saturation.
 
@@ -339,6 +345,7 @@ def main():
     parser.add_argument("--length",       default=1000,   type=int, help="ADC Capture Length (in Samples).")
     parser.add_argument("--downsampling", default=1,      type=int, help="ADC DownSampling (in Samples).")
     parser.add_argument("--ramp",         action="store_true",      help="Set ADC to Ramp mode.")
+    parser.add_argument("--div",          default="100:1",          help="Set AFE Dividers (100:1 (default), 10:1 or 1:1)")
     parser.add_argument("--auto-setup",   action="store_true",      help="Run Frontend/Gain Auto-Setup.")
     parser.add_argument("--upload-mode",  default="udp",            help="Data upload mode: udp or etherbone.")
     parser.add_argument("--csv",          default="",               help="CSV Dump file.")
@@ -351,6 +358,7 @@ def main():
         channel      = args.channel,
         length       = args.length,
         downsampling = args.downsampling,
+        div          = args.div,
         auto_setup   = args.auto_setup,
         ramp         = args.ramp,
         upload_mode  = args.upload_mode,
