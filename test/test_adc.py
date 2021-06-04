@@ -28,8 +28,19 @@ from peripherals.had1511 import *
 
 # ADC Test -----------------------------------------------------------------------------------------
 
-def adc_test(port, channel, length, downsampling, div, auto_setup, ramp=False, upload_mode="udp", csv="", plot=False): # FIXME: Add more parameters.
-    assert channel == 1 # FIXME
+def adc_test(port,
+    # ADC Parameters.
+    adc_channel, adc_samples, adc_downsampling, adc_mode,
+    # AFE Parameters.
+    afe_divider, afe_auto_setup,
+    # Upload Parameters.
+    upload_mode="udp",
+    # Dump Parameters.
+    dump="",
+    # Plot Parmeters.
+    plot=False):
+
+    assert adc_channel == 1 # FIXME
     bus = RemoteClient(port=port)
     bus.open()
 
@@ -54,8 +65,8 @@ def adc_test(port, channel, length, downsampling, div, auto_setup, ramp=False, u
     print("HAD1511 ADC Init...")
     adc0 = HAD1511Driver(bus, spi, n=0)
     adc0.reset()
-    adc0.downsampling.write(downsampling)
-    adc0.data_mode() if not ramp else adc.ramp()
+    adc0.downsampling.write(adc_downsampling)
+    adc0.data_mode() if adc_mode == "capture" else adc.ramp()
 
     # Analog Front-End (AFE) Init...
     # ------------------------------
@@ -70,8 +81,8 @@ def adc_test(port, channel, length, downsampling, div, auto_setup, ramp=False, u
 
     print("- Frontend Init...")
     frontend = FrontendDriver(bus, spi, [adc0, None])
-    if auto_setup:
-        frontend.auto_setup(offsetdac=offsetdac, div=div)
+    if afe_auto_setup:
+        frontend.auto_setup(offsetdac=offsetdac, div=afe_divider)
 
     # ADC Statistics / Capture
     # ------------------------
@@ -84,7 +95,7 @@ def adc_test(port, channel, length, downsampling, div, auto_setup, ramp=False, u
     print(f"- Samplerate: ~{adc0_samplerate/1e6}MSa/s ({adc0_samplerate*8/1e9}Gb/s)")
 
     print("ADC Data Capture (to DRAM)...")
-    adc0.capture(base=0x0000_0000, length=length)
+    adc0.capture(base=0x0000_0000, length=adc_samples)
 
     print("ADC Data Retrieve (from DRAM)...")
     adc_data = []
@@ -113,22 +124,22 @@ def adc_test(port, channel, length, downsampling, div, auto_setup, ramp=False, u
             adc_data.append((word >> 24) & 0xff)
 
     if upload_mode == "udp":
-        udp_data_retrieve(length)
+        udp_data_retrieve(adc_samples)
     elif upload_mode == "etherbone":
-        etherbone_data_retrieve(length)
+        etherbone_data_retrieve(adc_samples)
     else:
         raise ValueError
 
-    if len(adc_data) > length:
-        adc_data = adc_data[:length]
+    if len(adc_data) > adc_samples:
+        adc_data = adc_data[:adc_samples]
 
 
-    # CSV Export
-    # ----------
+    # Dump
+    # ----
 
-    if csv != "":
+    if dump != "":
         # Note: Requires export LC_NUMERIC=en_US.utf-8 with GLScopeClient.
-        f = open(csv, "w")
+        f = open(dump, "w")
         f.write("Time, ADC0\n")
         for n, d in enumerate(adc_data):
             line = f"{n/adc0_samplerate:1.15f}, {d:f}\n"
@@ -148,31 +159,46 @@ def adc_test(port, channel, length, downsampling, div, auto_setup, ramp=False, u
 # Run ----------------------------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description="ADC test utility")
-    parser.add_argument("--port",         default="1234",           help="Host bind port")
-    parser.add_argument("--channel",      default=1,      type=int, help="ADC Channel: 1 (default), 2, 3, or 4.")
-    parser.add_argument("--length",       default=1000,   type=int, help="ADC Capture Length (in Samples).")
-    parser.add_argument("--downsampling", default=1,      type=int, help="ADC DownSampling (in Samples).")
-    parser.add_argument("--ramp",         action="store_true",      help="Set ADC to Ramp mode.")
-    parser.add_argument("--div",          default="100:1",          help="Set AFE Dividers (100:1 (default), 10:1 or 1:1)")
-    parser.add_argument("--auto-setup",   action="store_true",      help="Run Frontend/Gain Auto-Setup.")
-    parser.add_argument("--upload-mode",  default="udp",            help="Data upload mode: udp or etherbone.")
-    parser.add_argument("--csv",          default="",               help="CSV Dump file.")
-    parser.add_argument("--plot",         action="store_true",      help="Plot Data.")
+    parser = argparse.ArgumentParser(description="ADC test utility.")
+    parser.add_argument("--port",              default="1234",           help="Host bind port.")
+    # ADC Parameters.
+    parser.add_argument("--adc-channel",      default=1,         type=int, help="ADC Channel: 1 (default), 2, 3, or 4.")
+    parser.add_argument("--adc-samples",      default=1000,      type=int, help="ADC Capture Samples (default=1000).")
+    parser.add_argument("--adc-downsampling", default=1,         type=int, help="ADC DownSampling Ratio (default=1).")
+    parser.add_argument("--adc-mode",         default="capture",           help="ADC Mode: capture (default), ramp.")
+
+    # AFE Parameters.
+    parser.add_argument("--afe-divider",    default="100",       help="Analog Front-End Divider: 100 (default), 10 or 1.")
+    parser.add_argument("--afe-auto-setup", action="store_true", help="Enable Analog Front-End Auto-Setup.")
+
+    # Upload Parameters.
+    parser.add_argument("--upload-mode", default="udp", help="Data upload mode: udp (default) or etherbone.")
+
+    # Dump Parameters.
+    parser.add_argument("--dump", default="", help="Dump captured data to specified CSV file.")
+
+    # Plot Parameters.
+    parser.add_argument("--plot", action="store_true", help="Plot captured data.")
+
     args = parser.parse_args()
 
     port = int(args.port, 0)
 
     adc_test(port=port,
-        channel      = args.channel,
-        length       = args.length,
-        downsampling = args.downsampling,
-        div          = args.div,
-        auto_setup   = args.auto_setup,
-        ramp         = args.ramp,
-        upload_mode  = args.upload_mode,
-        csv          = args.csv,
-        plot         = args.plot
+        # ADC.
+        adc_channel      = args.adc_channel,
+        adc_samples      = args.adc_samples,
+        adc_downsampling = args.adc_downsampling,
+        adc_mode         = args.adc_mode,
+        # AFE.
+        afe_divider      = args.afe_divider,
+        afe_auto_setup   = args.afe_auto_setup,
+        # Upload.
+        upload_mode      = args.upload_mode,
+        # Dump.
+        dump             = args.dump,
+        # Plot.
+        plot             = args.plot
     )
 
 if __name__ == "__main__":

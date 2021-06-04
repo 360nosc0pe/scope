@@ -68,5 +68,5 @@ $ litex_server.py --udp --udp-ip 192.168.1.50
 -----------
 Command used to capture a 115.2kbps UART:
 ```sh
-$ ./test_adc.py --length=100000 --downsampling=64 --auto-setup --plot --csv=dump.csv
+$ ./test_adc.py --adc-samples=100000 --adc-downsampling=64 --afe-divider=1 --afe-auto-setup --plot --dump=dump.csv
 ```

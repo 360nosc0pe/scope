@@ -70,10 +70,10 @@ class FrontendDriver:
     def auto_setup(self, offsetdac, div, debug=True): # FIXME: Very dumb Auto-Setup test, mostly to verify Frontend/Gains are behaving correctly, improve.
         print("Setting Frontend/Gain to default values...")
         frontend_value = FRONTEND_FULL_BANDWIDTH | FRONTEND_VGA_ENABLE | FRONTEND_DC_COUPLING
-        assert div in ["100:1", "10:1", "1:1"]
-        if div == "100:1":
+        assert div in ["100", "10", "1"]
+        if div == "100":
             frontend_value |= FRONTEND_10_1_FIRST_DIVIDER | FRONTEND_10_1_SECOND_DIVIDER
-        if div == "10:1":
+        if div == "10":
             frontend_value |= FRONTEND_10_1_FIRST_DIVIDER
         self.set_frontend(0, frontend_value)
         self.adcs[0].set_reg(0x2b, 0x00)                  # 1X ADC Gain.
