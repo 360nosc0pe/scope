@@ -5,6 +5,8 @@
 # Copyright (c) 2021 Florent Kermarrec <florent@enjoy-digital.fr>
 # SPDX-License-Identifier: BSD-2-Clause
 
+from peripherals.spi import *
+
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 #                               D E S C R I P T I O N                                              #
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
@@ -64,3 +66,52 @@ class FrontendDriver:
         self.set_frontend(0, 0x78)
         self.set_vga(0, 0xad)
         self.adcs[0].set_reg(0x2b, 0x00)
+
+    def auto_setup(self, offsetdac, div, debug=True): # FIXME: Very dumb Auto-Setup test, mostly to verify Frontend/Gains are behaving correctly, improve.
+        print("Setting Frontend/Gain to default values...")
+        frontend_value = FRONTEND_FULL_BANDWIDTH | FRONTEND_VGA_ENABLE | FRONTEND_DC_COUPLING
+        assert div in ["100:1", "10:1", "1:1"]
+        if div == "100:1":
+            frontend_value |= FRONTEND_10_1_FIRST_DIVIDER | FRONTEND_10_1_SECOND_DIVIDER
+        if div == "10:1":
+            frontend_value |= FRONTEND_10_1_FIRST_DIVIDER
+        self.set_frontend(0, frontend_value)
+        self.adcs[0].set_reg(0x2b, 0x00)                  # 1X ADC Gain.
+        self.set_vga(0, VGA_LOW_RANGE | 0x40) # Low VGA Gain to see Data but avoid saturation.
+
+        # Do 2 OffsetDAC/VGA calibration loops:
+        # - A First loop to find the rough OffsetDAC/Gain values.
+        # - A Second loop to refine them.
+        for loop in range(2):
+            print(f"Centering ADC Data through OffsetDAC (loop {loop})...")
+            best_offset = 0
+            best_error  = 0xff
+            for offset in range(0x2400, 0x2800, 1):
+                offsetdac.set_ch(0, offset)
+                _min, _max = self.adcs[0].get_range(duration=0.001)
+                _mean = _min + (_max - _min)/2
+                error = abs(_mean - 0xff/2)
+                if error < best_error:
+                    best_error  = error
+                    best_offset = offset
+                    if debug:
+                        print(f"OffsetDAC Best: 0x{offset:x} (ADC Min:{_min} Max: {_max} Mean: {_mean})")
+            print(f"Best OffsetDAC 0x{best_offset:x}")
+            offsetdac.set_ch(0, best_offset)
+
+            print(f"Adjusting ADC Dynamic with through VGA (loop {loop})...")
+            sat_margin   = 0x10
+            best_gain    = 0
+            best_dynamic = 0
+            for gain in range(0x00, 0x80, 1):
+                self.set_vga(0, VGA_HIGH_RANGE | gain)
+                _min, _max = self.adcs[0].get_range(duration=0.001)
+                _dynamic = (_max - _min)
+                if (_min > sat_margin) and (_max < (0xff - sat_margin)):
+                    if (_dynamic > best_dynamic):
+                        best_gain    = gain
+                        best_dynamic = _dynamic
+                        if debug:
+                            print(f"VGA Best: 0x{best_gain:x} (ADC Min:{_min} Max: {_max} Diff: {_dynamic})")
+            print(f"Best VGA Gain: 0x{best_gain:x}")
+            self.set_vga(0, VGA_HIGH_RANGE | best_gain)

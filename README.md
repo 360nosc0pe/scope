@@ -66,6 +66,7 @@ $ litex_server.py --udp --udp-ip 192.168.1.50
 
 [> Configure scope hardware and capture samples from CH1
 -----------
+Command used to capture a 115.2kbps UART:
 ```sh
-$ ./test/test_adc.py --length=10000 --auto-setup --plot
+$ ./test_adc.py --length=100000 --downsampling=64 --auto-setup --plot --csv=dump.csv
 ```
