@@ -280,10 +280,16 @@ class HAD1511ADCDriver:
         self.bus     = bus
         self.spi     = spi
         self.n       = n
-        self.control      = getattr(bus.regs, f"adc{n}_control")
-        self.downsampling = getattr(bus.regs, f"adc{n}_downsampling")
-        self.range        = getattr(bus.regs, f"adc{n}_range")
-        self.count        = getattr(bus.regs, f"adc{n}_count")
+
+        self.control      = getattr(bus.regs, f"adc{n//2}_control")
+        self.downsampling = getattr(bus.regs, f"adc{n//2}_downsampling")
+        self.range        = getattr(bus.regs, f"adc{n//2}_range")
+        self.count        = getattr(bus.regs, f"adc{n//2}_count")
+
+        self.dma_enable = getattr(bus.regs, f"adc{n//2}_dma_enable")
+        self.dma_base   = getattr(bus.regs, f"adc{n//2}_dma_base")
+        self.dma_length = getattr(bus.regs, f"adc{n//2}_dma_length")
+        self.dma_done   = getattr(bus.regs, f"adc{n//2}_dma_done")
 
     def reset(self):
         self.control.write(ADC_CONTROL_FRAME_RST)
@@ -345,9 +351,9 @@ class HAD1511ADCDriver:
         return adc_count/duration
 
     def capture(self, base, length):
-        self.bus.regs.adc0_dma_enable.write(0)
-        self.bus.regs.adc0_dma_base.write(base)
-        self.bus.regs.adc0_dma_length.write(length + 1024) # FIXME: +1024.
-        self.bus.regs.adc0_dma_enable.write(1)
-        while not (self.bus.regs.adc0_dma_done.read() & 0x1):
+        self.dma_enable.write(0)
+        self.dma_base.write(base)
+        self.dma_length.write(length + 1024) # FIXME: +1024.
+        self.dma_enable.write(1)
+        while not (self.dma_done.read() & 0x1):
             pass

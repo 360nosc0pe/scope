@@ -41,7 +41,7 @@ def adc_test(port,
     # Plot Parmeters.
     plot=False):
 
-    assert adc_channel == 1 # FIXME
+    assert adc_channel in [1, 3] # FIXME
     bus = RemoteClient(port=port)
     bus.open()
 
@@ -60,10 +60,10 @@ def adc_test(port,
     # ----------------
 
     print("HAD1511 ADC Init...")
-    adc0 = HAD1511ADCDriver(bus, spi, n=0)
-    adc0.reset()
-    adc0.downsampling.write(adc_downsampling)
-    adc0.data_mode() if adc_mode == "capture" else adc.ramp()
+    adc = HAD1511ADCDriver(bus, spi, n=adc_channel-1)
+    adc.reset()
+    adc.downsampling.write(adc_downsampling)
+    adc.data_mode() if adc_mode == "capture" else adc.ramp()
 
     # Analog Front-End (AFE) Init...
     # ------------------------------
@@ -77,7 +77,7 @@ def adc_test(port,
 
 
     print("- Frontend Init...")
-    frontend = FrontendDriver(bus, spi, [adc0, None])
+    frontend = FrontendDriver(bus, spi, adc)
     if afe_auto_setup:
         frontend.auto_setup(offsetdac=offsetdac, div=afe_divider)
 
@@ -85,14 +85,14 @@ def adc_test(port,
     # ------------------------
 
     print("ADC Statistics...")
-    adc0_min, adc0_max = adc0.get_range()
-    adc0_samplerate    = adc0.get_samplerate()
-    print(f"- Min: {adc0_min}")
-    print(f"- Max: {adc0_max}")
-    print(f"- Samplerate: ~{adc0_samplerate/1e6}MSa/s ({adc0_samplerate*8/1e9}Gb/s)")
+    adc_min, adc_max = adc.get_range()
+    adc_samplerate   = adc.get_samplerate()
+    print(f"- Min: {adc_min}")
+    print(f"- Max: {adc_max}")
+    print(f"- Samplerate: ~{adc_samplerate/1e6}MSa/s ({adc_samplerate*8/1e9}Gb/s)")
 
     print("ADC Data Capture (to DRAM)...")
-    adc0.capture(base=0x0000_0000, length=adc_samples)
+    adc.capture(base=0x0000_0000, length=adc_samples)
 
     print("ADC Data Retrieve (from DRAM)...")
     if upload_mode == "udp":
@@ -110,9 +110,9 @@ def adc_test(port,
     if dump != "":
         # Note: Requires export LC_NUMERIC=en_US.utf-8 with GLScopeClient.
         f = open(dump, "w")
-        f.write("Time, ADC0\n")
+        f.write("Time, ADC\n")
         for n, d in enumerate(adc_data):
-            line = f"{n/adc0_samplerate:1.15f}, {d:f}\n"
+            line = f"{n/adc_samplerate:1.15f}, {d:f}\n"
             f.write(line)
         f.close()
 
