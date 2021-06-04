@@ -53,11 +53,7 @@ def adc_test(port,
 
     print("ADF4360 PLL Init...")
     pll = ADF4360PLLDriver(bus, spi)
-    pll.init(
-        control_value   = 0x403120,
-        r_counter_value = 0x0007d1,
-        n_counter_value = 0x04e142,
-    )
+    pll.init()
 
     # HAD1511 ADC Init
     # ----------------

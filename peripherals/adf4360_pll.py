@@ -2,6 +2,7 @@
 # This file is part of 360nosc0pe/scope project.
 #
 # Copyright (c) 2021 Florent Kermarrec <florent@enjoy-digital.fr>
+# Copyright (c) 2020-2021 Felix Domke <tmbinc@elitedvb.net>
 # SPDX-License-Identifier: BSD-2-Clause
 
 from peripherals.spi import *
@@ -10,7 +11,9 @@ from peripherals.spi import *
 #                               D E S C R I P T I O N                                              #
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
-# N/A.
+ADF4360_CONTROL_DEFAULT   = 0x403120
+ADF4360_R_COUNTER_DEFAULT = 0x0007d1
+ADF4360_N_COUNTER_DEFAULT = 0x04e142
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 #                               D E F I N I T I O N S                                              #
@@ -233,13 +236,18 @@ class ADF4360PLLDriver:
         self.bus = bus
         self.spi = spi
 
-    def init(self, control_value=0x403120, r_counter_value=0x0007d1, n_counter_value=0x04e142):
+    def init(self,
+        control_value   = ADF4360_CONTROL_DEFAULT,
+        r_counter_value = ADF4360_R_COUNTER_DEFAULT,
+        n_counter_value = ADF4360_N_COUNTER_DEFAULT,
+        debug           = False):
         control   = ADF4360Control( value=control_value)
         r_counter = ADF4360RCounter(value=r_counter_value)
         n_counter = ADF4360NCounter(value=n_counter_value)
-        print(control)
-        print(r_counter)
-        print(n_counter)
+        if debug:
+            print(control)
+            print(r_counter)
+            print(n_counter)
 
         self.write(r_counter.encode())
         self.write(control.encode())
