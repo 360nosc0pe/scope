@@ -10,14 +10,16 @@
 # ADC test utility.
 
 import time
+import sys
 import argparse
 import socket
 import matplotlib.pyplot as plt
 
 from litex import RemoteClient
 
-from spi import *
-from adf4360 import ADF4360
+sys.path.append("..")
+from peripherals.spi import *
+from peripherals.adf4360 import ADF4360
 
 # Constants ----------------------------------------------------------------------------------------
 

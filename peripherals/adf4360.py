@@ -4,7 +4,7 @@
 # Copyright (c) 2021 Florent Kermarrec <florent@enjoy-digital.fr>
 # SPDX-License-Identifier: BSD-2-Clause
 
-from spi import *
+from peripherals.spi import *
 
 # ADF4360 Register Field ---------------------------------------------------------------------------
 
