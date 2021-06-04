@@ -226,9 +226,9 @@ class ADF4360NCounter(ADF4360Reg):
         )
         self.decode(value)
 
-# ADF4360 ------------------------------------------------------------------------------------------
+# ADF4360 PLL --------------------------------------------------------------------------------------
 
-class ADF4360Driver:
+class ADF4360PLLDriver:
     def __init__(self, bus, spi):
         self.bus = bus
         self.spi = spi

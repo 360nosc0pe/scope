@@ -23,8 +23,8 @@ from peripherals.spi import *
 from peripherals.spi import *
 from peripherals.offset_dac import *
 from peripherals.frontend import *
-from peripherals.adf4360 import *
-from peripherals.had1511 import *
+from peripherals.adf4360_pll import *
+from peripherals.had1511_adc import *
 
 # ADC Test -----------------------------------------------------------------------------------------
 
@@ -52,7 +52,7 @@ def adc_test(port,
     # ----------------
 
     print("ADF4360 PLL Init...")
-    pll = ADF4360Driver(bus, spi)
+    pll = ADF4360PLLDriver(bus, spi)
     pll.init(
         control_value   = 0x403120,
         r_counter_value = 0x0007d1,
@@ -63,7 +63,7 @@ def adc_test(port,
     # ----------------
 
     print("HAD1511 ADC Init...")
-    adc0 = HAD1511Driver(bus, spi, n=0)
+    adc0 = HAD1511ADCDriver(bus, spi, n=0)
     adc0.reset()
     adc0.downsampling.write(adc_downsampling)
     adc0.data_mode() if adc_mode == "capture" else adc.ramp()

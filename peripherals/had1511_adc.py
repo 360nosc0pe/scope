@@ -16,7 +16,7 @@ from litex.soc.interconnect.csr import *
 from litex.soc.interconnect import stream
 
 from peripherals.spi import *
-from peripherals.down_sampling import DownSampling
+from peripherals.downsampling import DownSampling
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 #                               D E S C R I P T I O N                                              #
@@ -44,9 +44,9 @@ ADC_RANGE_STAT_MAX    = (1 << 8)
 
 hmcad1511_phy_layout = ["fclk_p", "fclk_n", "lclk_p", "lclk_n", "d_p", "d_n"]
 
-# HAD1511 ------------------------------------------------------------------------------------------
+# HAD1511 ADC --------------------------------------------------------------------------------------
 
-class HAD1511(Module, AutoCSR):
+class HAD1511ADC(Module, AutoCSR):
     def __init__(self, pads, sys_clk_freq, clock_domain="sys"):
         # Parameters.
         nchannels = len(pads.d_p)
@@ -275,7 +275,7 @@ class HAD1511(Module, AutoCSR):
 #                                  S O F T W A R E                                                 #
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
-class HAD1511Driver:
+class HAD1511ADCDriver:
     def __init__(self, bus, spi, n):
         self.bus     = bus
         self.spi     = spi
