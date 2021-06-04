@@ -13,91 +13,11 @@ from migen.genlib.misc import WaitTimer
 from litex.soc.interconnect.csr import *
 from litex.soc.interconnect import stream
 
+from peripherals.down_sampling import DownSampling
+
 # Layouts ------------------------------------------------------------------------------------------
 
 hmcad1511_phy_layout = ["fclk_p", "fclk_n", "lclk_p", "lclk_n", "d_p", "d_n"]
-
-# ADC DownSampling ---------------------------------------------------------------------------------
-
-class ADCDownSamplingStage1(Module):
-    def __init__(self, ratio):
-        self.sink   = sink   = stream.Endpoint([("data", 64)])
-        self.source = source = stream.Endpoint([("data", 64)])
-
-        # # #
-
-        # Data-Width Converters.
-        _32to64 = stream.Converter(32, 64)
-        _16to64 = stream.Converter(16, 64)
-        _8to64  = stream.Converter(8,  64)
-        self.submodules += _32to64, _16to64, _8to64
-
-        # Data-Path
-        self.comb += [
-            # 1:1 Ratio.
-            If(ratio <= 1,
-                sink.connect(source)
-            # 1:2 Ratio.
-            ).Elif(ratio <= 2,
-                sink.connect(_32to64.sink, keep={"valid", "ready"}),
-                _32to64.sink.data[ 0: 8].eq(sink.data[ 0:8]),
-                _32to64.sink.data[ 8:16].eq(sink.data[16:24]),
-                _32to64.sink.data[16:24].eq(sink.data[32:48]),
-                _32to64.sink.data[24:32].eq(sink.data[56:64]),
-                _32to64.source.connect(source)
-            # 1:4 Ratio.
-            ).Elif(ratio <= 4,
-                sink.connect(_16to64.sink, keep={"valid", "ready"}),
-                _16to64.sink.data[0: 8].eq(sink.data[ 0:8]),
-                _16to64.sink.data[8:16].eq(sink.data[32:48]),
-                _16to64.source.connect(source)
-            # >= 1:8 Ratio.
-            ).Else(
-                sink.connect(_8to64.sink, keep={"valid", "ready"}),
-                _8to64.sink.data[0:8].eq(sink.data[ 0:8]),
-                _8to64.source.connect(source)
-            )
-        ]
-
-
-class ADCDownSamplingStage2(Module):
-    def __init__(self, ratio):
-        self.sink   = sink   = stream.Endpoint([("data", 64)])
-        self.source = source = stream.Endpoint([("data", 64)])
-
-        # # #
-
-        # Recopy Ready/Data.
-        self.comb += sink.ready.eq(source.ready)
-        self.comb += source.data.eq(sink.data)
-
-        # Throttle Valid.
-        count = Signal(16)
-        self.sync += [
-            If(ratio == 0,
-                count.eq(0)
-            ).Elif(sink.valid & sink.ready,
-                count.eq(count + 1),
-                If(source.valid,
-                    count.eq(0)
-                )
-            )
-        ]
-        self.comb += source.valid.eq(sink.valid & (count == ratio))
-
-
-class ADCDownSampling(Module):
-    def __init__(self, ratio):
-        self.sink   = sink   = stream.Endpoint([("data", 64)])
-        self.source = source = stream.Endpoint([("data", 64)])
-
-        # # #
-
-        stage1 = ADCDownSamplingStage1(ratio=ratio)
-        stage2 = ADCDownSamplingStage2(ratio=ratio[3:])
-        self.submodules += stage1, stage2
-
-        self.submodules += stream.Pipeline(sink, stage1, stage2, source)
 
 # HMCAD1511 ----------------------------------------------------------------------------------------
 
@@ -130,6 +50,7 @@ class HMCAD1511(Module, AutoCSR):
 
         # Clocking.
         # ---------
+
         self.clock_domains.cd_adc       = ClockDomain() # ADC Bitclock.
         self.clock_domains.cd_adc_frame = ClockDomain() # ADC Frameclock (freq : ADC Bitclock/8).
         adc_clk = Signal()
@@ -268,6 +189,7 @@ class HMCAD1511(Module, AutoCSR):
 
         # Clock Domain Crossing.
         # ----------------------
+
         self.submodules.cdc = stream.ClockDomainCrossing(
             layout  = [("data", nchannels*8)],
             cd_from = "adc_frame",
@@ -277,7 +199,8 @@ class HMCAD1511(Module, AutoCSR):
 
         # DownSampling.
         # -------------
-        self.submodules.downsampling = ADCDownSampling(ratio=self._downsampling.storage)
+
+        self.submodules.downsampling = DownSampling(ratio=self._downsampling.storage)
         self.comb += self.cdc.source.connect(self.downsampling.sink)
         self.comb += self.downsampling.source.connect(source)
         self.comb += self.downsampling.source.ready.eq(1) # No backpressure allowed.
