@@ -20,6 +20,7 @@ from peripherals.had1511_adc import *
 
 # Frontend.
 
+FRONTEND_DEFAULT             = 0x40     # FIXME: Understand bit-6.
 FRONTEND_10_1_FIRST_DIVIDER  = (1 << 1)
 FRONTEND_10_1_SECOND_DIVIDER = (1 << 2)
 FRONTEND_AC_COUPLING         = (0 << 3)
@@ -46,20 +47,20 @@ class AFEConfig:
 
 AFEScreenDivs     = 8
 AFEVPerDivConfigs = {
-      5*mV: AFEConfig(adc=ADC_GAIN_9DB, frontend=0x78, vga=0xb9),
-     10*mV: AFEConfig(adc=ADC_GAIN_6DB, frontend=0x78, vga=0xb9),
-     20*mV: AFEConfig(adc=ADC_GAIN_4DB, frontend=0x78, vga=0xb9),
-     50*mV: AFEConfig(adc=ADC_GAIN_2DB, frontend=0x78, vga=0xad),
-    100*mV: AFEConfig(adc=ADC_GAIN_0DB, frontend=0x78, vga=0xad),
-    200*mV: AFEConfig(adc=ADC_GAIN_4DB, frontend=0x78, vga=0x27),
-    500*mV: AFEConfig(adc=ADC_GAIN_0DB, frontend=0x78, vga=0x3f),
-       1*V: AFEConfig(adc=ADC_GAIN_0DB, frontend=0x78, vga=0x1f),
-       2*V: AFEConfig(adc=ADC_GAIN_4DB, frontend=0x7a, vga=0x29),
-       5*V: AFEConfig(adc=ADC_GAIN_0DB, frontend=0x7a, vga=0x41),
-      10*V: AFEConfig(adc=ADC_GAIN_0DB, frontend=0x7a, vga=0x21),
-      20*V: AFEConfig(adc=ADC_GAIN_4DB, frontend=0x7e, vga=0x28),
-      50*V: AFEConfig(adc=ADC_GAIN_0DB, frontend=0x7e, vga=0x41),
-     100*V: AFEConfig(adc=ADC_GAIN_0DB, frontend=0x7e, vga=0x20),
+      5*mV: AFEConfig(adc=ADC_GAIN_9DB, frontend=FRONTEND_VGA_ENABLE, vga=0xb9),
+     10*mV: AFEConfig(adc=ADC_GAIN_6DB, frontend=FRONTEND_VGA_ENABLE, vga=0xb9),
+     20*mV: AFEConfig(adc=ADC_GAIN_4DB, frontend=FRONTEND_VGA_ENABLE, vga=0xb9),
+     50*mV: AFEConfig(adc=ADC_GAIN_2DB, frontend=FRONTEND_VGA_ENABLE, vga=0xad),
+    100*mV: AFEConfig(adc=ADC_GAIN_0DB, frontend=FRONTEND_VGA_ENABLE, vga=0xad),
+    200*mV: AFEConfig(adc=ADC_GAIN_4DB, frontend=FRONTEND_VGA_ENABLE, vga=0x27),
+    500*mV: AFEConfig(adc=ADC_GAIN_0DB, frontend=FRONTEND_VGA_ENABLE, vga=0x3f),
+       1*V: AFEConfig(adc=ADC_GAIN_0DB, frontend=FRONTEND_VGA_ENABLE, vga=0x1f),
+       2*V: AFEConfig(adc=ADC_GAIN_4DB, frontend=FRONTEND_VGA_ENABLE | FRONTEND_10_1_FIRST_DIVIDER, vga=0x29),
+       5*V: AFEConfig(adc=ADC_GAIN_0DB, frontend=FRONTEND_VGA_ENABLE | FRONTEND_10_1_FIRST_DIVIDER, vga=0x41),
+      10*V: AFEConfig(adc=ADC_GAIN_0DB, frontend=FRONTEND_VGA_ENABLE | FRONTEND_10_1_FIRST_DIVIDER, vga=0x21),
+      20*V: AFEConfig(adc=ADC_GAIN_4DB, frontend=FRONTEND_VGA_ENABLE | FRONTEND_10_1_FIRST_DIVIDER | FRONTEND_10_1_SECOND_DIVIDER, vga=0x28),
+      50*V: AFEConfig(adc=ADC_GAIN_0DB, frontend=FRONTEND_VGA_ENABLE | FRONTEND_10_1_FIRST_DIVIDER | FRONTEND_10_1_SECOND_DIVIDER, vga=0x41),
+     100*V: AFEConfig(adc=ADC_GAIN_0DB, frontend=FRONTEND_VGA_ENABLE | FRONTEND_10_1_FIRST_DIVIDER | FRONTEND_10_1_SECOND_DIVIDER, vga=0x20),
 }
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
@@ -77,15 +78,29 @@ class FrontendDriver:
         self.bus  = bus
         self.spi  = spi
         self.adc  = adc
-        self.frontend_values = [0x7a, 0x7a, 0x7a, 0x7a]
+        self.frontend_values = [FRONTEND_DEFAULT for i in range(4)]
 
     def set_frontend(self, n, data):
-        self.frontend_values[4-1-n] = data
+        self.frontend_values[4-1-n] |= data # /!\ FIXME!
         self.spi.write(SPI_CS_FRONTEND, [0x00] + self.frontend_values)
 
     def set_vga(self, n, gain):
         assert 0 <= gain <= 255
         self.spi.write(SPI_CS_CH1_VGA + n, [gain])
+
+    def set_coupling(self, coupling):
+        assert coupling in ["dc", "ac"]
+        frontend_value = self.frontend_values[4-1-self.adc.n] & (~FRONTEND_DC_COUPLING)
+        if coupling == "dc":
+            frontend_value |= FRONTEND_DC_COUPLING
+        self.set_frontend(self.adc.n, frontend_value)
+
+    def set_bwl(self, bwl):
+        assert bwl in ["full", "20mhz"]
+        frontend_value = self.frontend_values[4-1-self.adc.n] & (~FRONTEND_FULL_BANDWIDTH)
+        if bwl == "full":
+            frontend_value |= FRONTEND_FULL_BANDWIDTH
+        self.set_frontend(self.adc.n, frontend_value)
 
     def set_range(self, req_range):
         print(f"Requesting Range to {req_range:f}V...")

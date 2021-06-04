@@ -33,7 +33,7 @@ def adc_test(port,
     # ADC Parameters.
     adc_channel, adc_samples, adc_downsampling, adc_mode,
     # AFE Parameters.
-    afe_range, afe_center,
+    afe_range, afe_coupling, afe_bwl, afe_center,
     # Upload Parameters.
     upload_mode="udp",
     # Dump Parameters.
@@ -78,6 +78,8 @@ def adc_test(port,
 
     print("- Frontend Init...")
     frontend = FrontendDriver(bus, spi, adc)
+    frontend.set_coupling(afe_coupling)
+    frontend.set_bwl(afe_bwl)
     afe_resolution = frontend.set_range(afe_range)
     if afe_center:
         frontend.center(offsetdac)
@@ -140,6 +142,8 @@ def main():
 
     # AFE Parameters.
     parser.add_argument("--afe-range",      default=10,          type=float, help="Analog Front-End Dynamic Range: 5mV to 800V (default=10V).")
+    parser.add_argument("--afe-coupling",   default="dc",                    help="Analog Front-End Coupling: dc (default) or ac.")
+    parser.add_argument("--afe-bwl",        default="full",                  help="Analog Front-End Bandwidth Limitation: full (default) or 20mhz")
     parser.add_argument("--afe-center",     action="store_true",             help="Center Signal with Offset DAC.")
 
     # Upload Parameters.
@@ -163,6 +167,8 @@ def main():
         adc_mode         = args.adc_mode,
         # AFE.
         afe_range        = args.afe_range,
+        afe_coupling     = args.afe_coupling,
+        afe_bwl          = args.afe_bwl,
         afe_center       = args.afe_center,
         # Upload.
         upload_mode      = args.upload_mode,
