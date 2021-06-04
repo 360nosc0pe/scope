@@ -78,7 +78,7 @@ def adc_test(port,
 
     print("- Frontend Init...")
     frontend = FrontendDriver(bus, spi, adc)
-    frontend.set_range(afe_range)
+    afe_resolution = frontend.set_range(afe_range)
     if afe_center:
         frontend.center(offsetdac)
 
@@ -113,7 +113,7 @@ def adc_test(port,
         f = open(dump, "w")
         f.write("Time, ADC\n")
         for n, d in enumerate(adc_data):
-            line = f"{n/adc_samplerate:1.15f}, {d:f}\n"
+            line = f"{n/adc_samplerate:1.15f}, {d*afe_resolution:f}\n"
             f.write(line)
         f.close()
 

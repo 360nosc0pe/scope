@@ -98,9 +98,13 @@ class FrontendDriver:
                 afe_config    = c
                 break
         print(f"Selecting {sel_range_div:f}V/Div AFE Config...")
+        afe_resolution = (sel_range_div*AFEScreenDivs)/256
+
         self.set_frontend(self.adc.n, afe_config.frontend)
         self.adc.set_reg(0x2b, afe_config.adc)
         self.set_vga(self.adc.n, afe_config.vga)
+
+        return afe_resolution
 
     def center(self, offsetdac, debug=True):
         print(f"Centering ADC Data through OffsetDAC...")
