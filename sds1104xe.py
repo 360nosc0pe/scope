@@ -25,16 +25,15 @@ from litex.soc.interconnect import stream
 
 from litedram.modules import MT41K64M16
 from litedram.phy import s7ddrphy
-from litedram.frontend.dma import LiteDRAMDMAWriter, LiteDRAMDMAReader
+from litedram.frontend.dma import LiteDRAMDMAWriter
 
-from liteeth.common import convert_ip
 from liteeth.phy.mii import LiteEthPHYMII
-from liteeth.frontend.stream import LiteEthStream2UDPTX
 
 from peripherals.offset_dac import OffsetDAC
-from peripherals.had1511 import HAD1511
+from peripherals.had1511_adc import HAD1511ADC
 
 from peripherals.frontpanel import FrontpanelLeds, FrontpanelButtons
+from peripherals.dma_upload import DMAUpload
 
 from litescope import LiteScopeAnalyzer
 
@@ -276,7 +275,7 @@ class ScopeSoC(SoCCore):
 
         # ADCs + DMAs.
         for i in range(2):
-            adc  = HAD1511(self.platform.request("adc", i), sys_clk_freq)
+            adc  = HAD1511ADC(self.platform.request("adc", i), sys_clk_freq)
             port = self.sdram.crossbar.get_port()
             conv = stream.Converter(64, port.data_width)
             dma  = LiteDRAMDMAWriter(self.sdram.crossbar.get_port(), fifo_depth=16, with_csr=True)
@@ -285,34 +284,12 @@ class ScopeSoC(SoCCore):
             setattr(self.submodules, f"adc{i}_dma",  dma)
             self.submodules += stream.Pipeline(adc, conv, dma)
 
-        # Upload -----------------------------------------------------------------------------------
-        # DMA Reader
-        # ----------
-        dram_port = self.sdram.crossbar.get_port()
-        self.submodules.dma_reader      = LiteDRAMDMAReader(dram_port, fifo_depth=16, with_csr=True)
-        self.submodules.dma_reader_conv = stream.Converter(dram_port.data_width, 8)
-
-        # UDP Streamer
-        # ------------
-        udp_port       = self.ethcore.udp.crossbar.get_port(host_udp_port, dw=8)
-        udp_streamer   = LiteEthStream2UDPTX(
-            ip_address = convert_ip(host_ip),
-            udp_port   = host_udp_port,
-            fifo_depth = 1024,
-            send_level = 1024
-        )
-
-        self.submodules.udp_cdc      = stream.ClockDomainCrossing([("data", 8)], "sys", "eth_rx")
-        self.submodules.udp_streamer = ClockDomainsRenamer("eth_rx")(udp_streamer)
-
-        # DMA -> UDP Pipeline
-        # -------------------
-        self.submodules += stream.Pipeline(
-            self.dma_reader,
-            self.dma_reader_conv,
-            self.udp_cdc,
-            self.udp_streamer,
-            udp_port
+        # DMA Upload -------------------------------------------------------------------------------
+        self.submodules.dma_upload = DMAUpload(
+            dram_port = self.sdram.crossbar.get_port(),
+            udp_port  = self.ethcore.udp.crossbar.get_port(host_udp_port, dw=8),
+            dst_ip       = host_ip,
+            dst_udp_port = host_udp_port
         )
 
         # Analyzer ---------------------------------------------------------------------------------

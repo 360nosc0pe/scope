@@ -12,7 +12,7 @@
 import time
 import sys
 import argparse
-import socket
+
 import matplotlib.pyplot as plt
 
 from litex import RemoteClient
@@ -20,11 +20,12 @@ from litex import RemoteClient
 sys.path.append("..")
 from peripherals.spi import *
 
-from peripherals.spi import *
-from peripherals.offset_dac import *
-from peripherals.frontend import *
+from peripherals.spi         import *
+from peripherals.offset_dac  import *
+from peripherals.frontend    import *
 from peripherals.adf4360_pll import *
 from peripherals.had1511_adc import *
+from peripherals.dma_upload import *
 
 # ADC Test -----------------------------------------------------------------------------------------
 
@@ -94,41 +95,14 @@ def adc_test(port,
     adc0.capture(base=0x0000_0000, length=adc_samples)
 
     print("ADC Data Retrieve (from DRAM)...")
-    adc_data = []
-
-    def udp_data_retrieve(length):
-        offset   = 0
-        sock     = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.bind(("192.168.1.100", 2000))
-        while length > 0:
-            bus.regs.dma_reader_enable.write(0)
-            bus.regs.dma_reader_base.write(0x0000_0000 + offset)
-            bus.regs.dma_reader_length.write(1024)
-            bus.regs.dma_reader_enable.write(1)
-            data, _ = sock.recvfrom(1024)
-            for b in data:
-                adc_data.append(b)
-            length -= len(data)
-            offset += len(data)
-
-    def etherbone_data_retrieve(length):
-        for i in range(length//4):
-            word = bus.read(bus.mems.main_ram.base + 4*i)
-            adc_data.append((word >> 0)  & 0xff)
-            adc_data.append((word >> 8)  & 0xff)
-            adc_data.append((word >> 16) & 0xff)
-            adc_data.append((word >> 24) & 0xff)
-
     if upload_mode == "udp":
-        udp_data_retrieve(adc_samples)
+        adc_data = udp_data_retrieve(bus, 0x0000_0000, adc_samples)
     elif upload_mode == "etherbone":
-        etherbone_data_retrieve(adc_samples)
+        adc_data = etherbone_data_retrieve(bus, adc_samples)
     else:
         raise ValueError
-
     if len(adc_data) > adc_samples:
         adc_data = adc_data[:adc_samples]
-
 
     # Dump
     # ----

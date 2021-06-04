@@ -9,10 +9,13 @@
 # DRAM Upload test utility.
 
 import time
+import sys
 import argparse
-import socket
 
 from litex import RemoteClient
+
+sys.path.append("..")
+from peripherals.dma_upload import *
 
 # Upload Test --------------------------------------------------------------------------------------
 
@@ -32,24 +35,7 @@ def upload_test(port, base, length):
                 self.bus.write(bus.mems.main_ram.base + base + 4*i, word)
 
         def upload(self, base, length):
-            # Create Socket and listen.
-            sock   = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.bind(("192.168.1.100", 2000))
-
-            # Upload Data in chunks.
-            data   = []
-            offset = 0
-            while length > 0:
-                bus.regs.dma_reader_enable.write(0)
-                bus.regs.dma_reader_base.write(base + offset)
-                bus.regs.dma_reader_length.write(self.chunk_length)
-                bus.regs.dma_reader_enable.write(1)
-                d, _ = sock.recvfrom(self.chunk_length)
-                for b in d:
-                    data.append(b)
-                length -= self.chunk_length
-                offset += self.chunk_length
-            return data
+            return udp_data_retrieve(bus, base, length)
 
     reference = [i%256 for i in range(length)]
 

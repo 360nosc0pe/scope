@@ -21,11 +21,11 @@ from litex.soc.interconnect import stream
 from litedram.common import PhySettings
 from litedram.modules import MT41K64M16
 from litedram.phy.model import SDRAMPHYModel
-from litedram.frontend.dma import LiteDRAMDMAWriter, LiteDRAMDMAReader
+from litedram.frontend.dma import LiteDRAMDMAWriter
 
-from liteeth.common import convert_ip
 from liteeth.phy.model import LiteEthPHYModel
-from liteeth.frontend.stream import LiteEthStream2UDPTX
+
+from peripherals.dma_upload import DMAUpload
 
 # IOs ----------------------------------------------------------------------------------------------
 
@@ -103,33 +103,12 @@ class ScopeSoC(SoCCore):
         self.submodules.ethphy = LiteEthPHYModel(self.platform.request("eth"))
         self.add_etherbone(phy=self.ethphy, ip_address=scope_ip)
 
-        # Upload -----------------------------------------------------------------------------------
-        # DMA Reader
-        # ----------
-        dram_port = self.sdram.crossbar.get_port()
-        self.submodules.dma_reader      = LiteDRAMDMAReader(dram_port, fifo_depth=128, with_csr=True)
-        self.submodules.dma_reader_conv = stream.Converter(dram_port.data_width, 8)
-
-        # UDP Streamer
-        # ------------
-        udp_port       = self.ethcore.udp.crossbar.get_port(host_udp_port, dw=8)
-        udp_streamer   = LiteEthStream2UDPTX(
-            ip_address = convert_ip(host_ip),
-            udp_port   = host_udp_port,
-            fifo_depth = 1024,
-            send_level = 1024
-        )
-        self.submodules.udp_cdc      = stream.ClockDomainCrossing([("data", 8)], "sys", "eth_rx")
-        self.submodules.udp_streamer = ClockDomainsRenamer("eth_rx")(udp_streamer)
-
-        # DMA -> UDP Pipeline
-        # -------------------
-        self.submodules += stream.Pipeline(
-            self.dma_reader,
-            self.dma_reader_conv,
-            self.udp_cdc,
-            self.udp_streamer,
-            udp_port
+        # DMA Upload -------------------------------------------------------------------------------
+        self.submodules.dma_upload = DMAUpload(
+            dram_port = self.sdram.crossbar.get_port(),
+            udp_port  = self.ethcore.udp.crossbar.get_port(host_udp_port, dw=8),
+            dst_ip       = host_ip,
+            dst_udp_port = host_udp_port
         )
 
 # Build --------------------------------------------------------------------------------------------
