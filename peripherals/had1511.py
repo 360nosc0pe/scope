@@ -19,9 +19,9 @@ from peripherals.down_sampling import DownSampling
 
 hmcad1511_phy_layout = ["fclk_p", "fclk_n", "lclk_p", "lclk_n", "d_p", "d_n"]
 
-# HMCAD1511 ----------------------------------------------------------------------------------------
+# HAD1511 ------------------------------------------------------------------------------------------
 
-class HMCAD1511(Module, AutoCSR):
+class HAD1511(Module, AutoCSR):
     def __init__(self, pads, sys_clk_freq, clock_domain="sys"):
         # Parameters.
         nchannels = len(pads.d_p)

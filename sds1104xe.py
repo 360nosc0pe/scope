@@ -32,7 +32,7 @@ from liteeth.phy.mii import LiteEthPHYMII
 from liteeth.frontend.stream import LiteEthStream2UDPTX
 
 from peripherals.offset_dac import OffsetDAC
-from peripherals.adc import HMCAD1511
+from peripherals.had1511 import HAD1511
 
 from peripherals.frontpanel import FrontpanelLeds, FrontpanelButtons
 
@@ -193,7 +193,7 @@ class ScopeSoC(SoCCore):
         #                             │                           │
         #                          ┌──┴───┐      ┌─────┐      ┌───┴──┐
         #                          │ ADC0 │◄─────┤ PLL ├─────►│ ADC1 │
-        #                          │  HMC │      └─────┘      │  HMC │
+        #                          │   H  │      └─────┘      │   H  │
         #                       ┌─►│AD1511│◄──┐  ADF4360   ┌─►│AD1511│◄──┐
         #                       │  └──────┘   │            │  └──────┘   │
         #                       │             │            │             │
@@ -276,7 +276,7 @@ class ScopeSoC(SoCCore):
 
         # ADCs + DMAs.
         for i in range(2):
-            adc  = HMCAD1511(self.platform.request("adc", i), sys_clk_freq)
+            adc  = HAD1511(self.platform.request("adc", i), sys_clk_freq)
             port = self.sdram.crossbar.get_port()
             conv = stream.Converter(64, port.data_width)
             dma  = LiteDRAMDMAWriter(self.sdram.crossbar.get_port(), fifo_depth=16, with_csr=True)
