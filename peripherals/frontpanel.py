@@ -12,7 +12,15 @@ from migen import *
 from litex.soc.interconnect.csr import *
 from litex.soc.cores.spi import SPIMaster
 
-# Frontpanel Leds ----------------------------------------------------------------------------------
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
+#                               D E S C R I P T I O N                                              #
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
+
+# N/A.
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
+#                               D E F I N I T I O N S                                              #
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
 class FP_LEDS(IntEnum):
     INTENSITY_ADJUST = (1 <<  0)
@@ -34,31 +42,6 @@ class FP_LEDS(IntEnum):
     TRIGGER_SINGLE   = (1 << 16)
     RUN_STOP_GREEN   = (1 << 17)
     RUN_STOP_RED     = (1 << 18)
-
-class FrontpanelLeds(Module, AutoCSR):
-    def __init__(self, pads, sys_clk_freq):
-        self.value = CSRStorage(19)
-
-        # # #
-
-        # SPI Master.
-        pads.miso = Signal() # Add fake MISO pad.
-        self.submodules.spi = spi = SPIMaster(pads,
-            data_width   = 19,
-            sys_clk_freq = sys_clk_freq,
-            spi_clk_freq = 100e3,
-            with_csr     = False
-        )
-
-        # Enable shift register to drive LEDs (otherwise they are all-on).
-        self.comb += pads.oe.eq(0)
-
-        # SPI Control.
-        self.sync += If(spi.done, spi.mosi.eq(self.value.storage)) # Update SPI MOSI when Xfer done.
-        self.comb += spi.length.eq(19)
-        self.sync += spi.start.eq(spi.done) # Continous SPI Xfers.
-
-# Frontpanel Buttons -------------------------------------------------------------------------------
 
 class FP_BTNS(IntEnum):
     MENU_ON_OFF      = (1 << 56)
@@ -99,6 +82,37 @@ class FP_BTNS(IntEnum):
     AUTOSETUP        = (1 << 17)
     DEFAULT          = (1 << 12)
 
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
+#                                  G A T E W A R E                                                 #
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
+
+# Frontpanel Leds ----------------------------------------------------------------------------------
+
+class FrontpanelLeds(Module, AutoCSR):
+    def __init__(self, pads, sys_clk_freq):
+        self.value = CSRStorage(19)
+
+        # # #
+
+        # SPI Master.
+        pads.miso = Signal() # Add fake MISO pad.
+        self.submodules.spi = spi = SPIMaster(pads,
+            data_width   = 19,
+            sys_clk_freq = sys_clk_freq,
+            spi_clk_freq = 100e3,
+            with_csr     = False
+        )
+
+        # Enable shift register to drive LEDs (otherwise they are all-on).
+        self.comb += pads.oe.eq(0)
+
+        # SPI Control.
+        self.sync += If(spi.done, spi.mosi.eq(self.value.storage)) # Update SPI MOSI when Xfer done.
+        self.comb += spi.length.eq(19)
+        self.sync += spi.start.eq(spi.done) # Continous SPI Xfers.
+
+# Frontpanel Buttons -------------------------------------------------------------------------------
+
 class FrontpanelButtons(Module, AutoCSR):
     def __init__(self, pads, sys_clk_freq):
         self.value = CSRStatus(64)
@@ -118,3 +132,10 @@ class FrontpanelButtons(Module, AutoCSR):
         self.sync += If(spi.done, self.value.status.eq(spi.miso)) # Update Value when SPI Xfer done.
         self.comb += spi.length.eq(64)
         self.sync += spi.start.eq(spi.done) # Continous SPI Xfers.
+
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
+#                                  S O F T W A R E                                                 #
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
+
+# N/A.
