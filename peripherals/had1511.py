@@ -5,6 +5,8 @@
 # Copyright (c) 2021 Florent Kermarrec <florent@enjoy-digital.fr>
 # SPDX-License-Identifier: BSD-2-Clause
 
+import time
+
 from migen import *
 from migen.genlib.resetsync import AsyncResetSynchronizer
 
@@ -13,6 +15,7 @@ from migen.genlib.misc import WaitTimer
 from litex.soc.interconnect.csr import *
 from litex.soc.interconnect import stream
 
+from peripherals.spi import *
 from peripherals.down_sampling import DownSampling
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
@@ -25,7 +28,13 @@ from peripherals.down_sampling import DownSampling
 #                               D E F I N I T I O N S                                              #
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
-# N/A.
+ADC_CONTROL_FRAME_RST = (1 << 0)
+ADC_CONTROL_DELAY_RST = (1 << 1)
+ADC_CONTROL_DELAY_INC = (1 << 2)
+ADC_CONTROL_STAT_RST  = (1 << 3)
+
+ADC_RANGE_STAT_MIN    = (1 << 0)
+ADC_RANGE_STAT_MAX    = (1 << 8)
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 #                                  G A T E W A R E                                                 #
@@ -266,4 +275,79 @@ class HAD1511(Module, AutoCSR):
 #                                  S O F T W A R E                                                 #
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
-# N/A.
+class HAD1511Driver:
+    def __init__(self, bus, spi, n):
+        self.bus     = bus
+        self.spi     = spi
+        self.n       = n
+        self.control      = getattr(bus.regs, f"adc{n}_control")
+        self.downsampling = getattr(bus.regs, f"adc{n}_downsampling")
+        self.range        = getattr(bus.regs, f"adc{n}_range")
+        self.count        = getattr(bus.regs, f"adc{n}_count")
+
+    def reset(self):
+        self.control.write(ADC_CONTROL_FRAME_RST)
+
+    def set_reg(self, reg, value):
+        self.spi.write(SPI_CS_ADC0 + self.n, [reg, (value >> 8) & 0xff, value & 0xff])
+
+    def data_mode(self):
+        self.set_reg(0, 0x0001)
+        time.sleep(.1)
+        self.set_reg(0xF, 0x200)
+        time.sleep(.1)
+        self.set_reg(0x31, 0x0001)
+        #self.set_reg(0x53, 0x0000)
+        #self.set_reg(0x31, 0x0008)
+        #self.set_reg(0x53, 0x0004)
+
+        self.set_reg(0x0F, 0x0000)
+        self.set_reg(0x30, 0x0008)
+        self.set_reg(0x3A, 0x0202)
+        self.set_reg(0x3B, 0x0202)
+        self.set_reg(0x33, 0x0001)
+        #self.set_reg(0x2B, 0x0222)
+        self.set_reg(0x2A, 0x2222)
+        self.set_reg(0x25, 0x0000)
+        self.set_reg(0x31, 0x0001) # clk_divide = /1, single channel interleaving ADC1..4
+
+    def ramp(self):
+        self.set_reg(0x25, 0x0040)
+
+    def single(self, pattern):
+        self.set_reg(0x25, 0x0010)
+        self.set_reg(0x26, pattern)
+
+    def dual(self, pattern0, pattern1):
+        self.set_reg(0x25, 0x0020)
+        self.set_reg(0x26, pattern0)
+        self.set_reg(0x27, pattern1)
+
+    def pat_deskew(self):
+        self.set_reg(0x25, 0x0000)
+        self.set_reg(0x45, 2)
+
+    def pat_sync(self):
+        self.set_reg(0x25, 0x0000)
+        self.set_reg(0x45, 1)
+
+    def get_range(self, duration=0.5):
+        self.control.write(ADC_CONTROL_STAT_RST)
+        time.sleep(duration)
+        adc_min = (self.range.read() >> 0) & 0xff
+        adc_max = (self.range.read() >> 8) & 0xff
+        return adc_min, adc_max
+
+    def get_samplerate(self, duration=0.5):
+        self.control.write(ADC_CONTROL_STAT_RST)
+        time.sleep(duration)
+        adc_count = self.count.read()
+        return adc_count/duration
+
+    def capture(self, base, length):
+        self.bus.regs.adc0_dma_enable.write(0)
+        self.bus.regs.adc0_dma_base.write(base)
+        self.bus.regs.adc0_dma_length.write(length + 1024) # FIXME: +1024.
+        self.bus.regs.adc0_dma_enable.write(1)
+        while not (self.bus.regs.adc0_dma_done.read() & 0x1):
+            pass

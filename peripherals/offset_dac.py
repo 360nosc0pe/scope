@@ -190,4 +190,13 @@ if __name__ == '__main__':
 #                                  S O F T W A R E                                                 #
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
-# N/A.
+class OffsetDACDriver:
+    def __init__(self, bus, spi):
+        self.bus = bus
+        self.spi = spi
+
+    def init(self):
+        self.bus.regs.offset_dac_control.write(1)
+
+    def set_ch(self, n, value):
+        getattr(self.bus.regs, f"offset_dac_ch{n+1}").write(value)

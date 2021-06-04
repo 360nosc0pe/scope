@@ -19,155 +19,12 @@ from litex import RemoteClient
 
 sys.path.append("..")
 from peripherals.spi import *
-from peripherals.adf4360 import ADF4360
 
-# Constants ----------------------------------------------------------------------------------------
-
-# Frontend.
-
-FRONTEND_10_1_FIRST_DIVIDER  = (1 << 1)
-FRONTEND_10_1_SECOND_DIVIDER = (1 << 2)
-FRONTEND_AC_COUPLING         = (0 << 3)
-FRONTEND_DC_COUPLING         = (1 << 3)
-FRONTEND_VGA_ENABLE          = (1 << 4)
-FRONTEND_20MHZ_BANDWIDTH     = (0 << 5)
-FRONTEND_FULL_BANDWIDTH      = (1 << 5)
-
-# VGA.
-
-VGA_LOW_RANGE  = (0 << 7)
-VGA_HIGH_RANGE = (1 << 7)
-
-# ADC.
-
-ADC_CONTROL_FRAME_RST = (1 << 0)
-ADC_CONTROL_DELAY_RST = (1 << 1)
-ADC_CONTROL_DELAY_INC = (1 << 2)
-ADC_CONTROL_STAT_RST  = (1 << 3)
-
-ADC_RANGE_STAT_MIN    = (1 << 0)
-ADC_RANGE_STAT_MAX    = (1 << 8)
-
-# Peripherals --------------------------------------------------------------------------------------
-
-# Offset DAC.
-
-class OffsetDAC:
-    def __init__(self, bus, spi):
-        self.bus = bus
-        self.spi = spi
-
-    def init(self):
-        self.bus.regs.offset_dac_control.write(1)
-
-    def set_ch(self, n, value):
-        getattr(self.bus.regs, f"offset_dac_ch{n+1}").write(value)
-
-# Frontend.
-
-class Frontend:
-    def __init__(self, bus, spi, adcs):
-        self.bus  = bus
-        self.spi  = spi
-        self.adcs = adcs
-        self.frontend_values = [0x7a, 0x7a, 0x7a, 0x7a]
-
-    def set_frontend(self, n, data):
-        self.frontend_values[4-1-n] = data
-        self.spi.write(SPI_CS_FRONTEND, [0x00] + self.frontend_values)
-
-    def set_vga(self, n, gain):
-        assert 0 <= gain <= 255
-        self.spi.write(SPI_CS_CH1_VGA + n, [gain])
-
-    def set_ch1_1v(self):
-        self.set_frontend(0, 0x7e)
-        self.set_vga(0, 0x1f)
-        self.adcs[0].set_reg(0x2b, 0x00)
-
-    def set_ch1_100mv(self):
-        self.set_frontend(0, 0x78)
-        self.set_vga(0, 0xad)
-        self.adcs[0].set_reg(0x2b, 0x00)
-
-# ADC.
-
-class ADC:
-    def __init__(self, bus, spi, n):
-        self.bus     = bus
-        self.spi     = spi
-        self.n       = n
-        self.control      = getattr(bus.regs, f"adc{n}_control")
-        self.downsampling = getattr(bus.regs, f"adc{n}_downsampling")
-        self.range        = getattr(bus.regs, f"adc{n}_range")
-        self.count        = getattr(bus.regs, f"adc{n}_count")
-
-    def reset(self):
-        self.control.write(ADC_CONTROL_FRAME_RST)
-
-    def set_reg(self, reg, value):
-        self.spi.write(SPI_CS_ADC0 + self.n, [reg, (value >> 8) & 0xff, value & 0xff])
-
-    def data_mode(self):
-        self.set_reg(0, 0x0001)
-        time.sleep(.1)
-        self.set_reg(0xF, 0x200)
-        time.sleep(.1)
-        self.set_reg(0x31, 0x0001)
-        #self.set_reg(0x53, 0x0000)
-        #self.set_reg(0x31, 0x0008)
-        #self.set_reg(0x53, 0x0004)
-
-        self.set_reg(0x0F, 0x0000)
-        self.set_reg(0x30, 0x0008)
-        self.set_reg(0x3A, 0x0202)
-        self.set_reg(0x3B, 0x0202)
-        self.set_reg(0x33, 0x0001)
-        #self.set_reg(0x2B, 0x0222)
-        self.set_reg(0x2A, 0x2222)
-        self.set_reg(0x25, 0x0000)
-        self.set_reg(0x31, 0x0001) # clk_divide = /1, single channel interleaving ADC1..4
-
-    def ramp(self):
-        self.set_reg(0x25, 0x0040)
-
-    def single(self, pattern):
-        self.set_reg(0x25, 0x0010)
-        self.set_reg(0x26, pattern)
-
-    def dual(self, pattern0, pattern1):
-        self.set_reg(0x25, 0x0020)
-        self.set_reg(0x26, pattern0)
-        self.set_reg(0x27, pattern1)
-
-    def pat_deskew(self):
-        self.set_reg(0x25, 0x0000)
-        self.set_reg(0x45, 2)
-
-    def pat_sync(self):
-        self.set_reg(0x25, 0x0000)
-        self.set_reg(0x45, 1)
-
-    def get_range(self, duration=0.5):
-        self.control.write(ADC_CONTROL_STAT_RST)
-        time.sleep(duration)
-        adc_min = (self.range.read() >> 0) & 0xff
-        adc_max = (self.range.read() >> 8) & 0xff
-        return adc_min, adc_max
-
-    def get_samplerate(self, duration=0.5):
-        self.control.write(ADC_CONTROL_STAT_RST)
-        time.sleep(duration)
-        adc_count = self.count.read()
-        return adc_count/duration
-
-    def capture(self, base, length):
-        self.bus.regs.adc0_dma_enable.write(0)
-        self.bus.regs.adc0_dma_base.write(base)
-        self.bus.regs.adc0_dma_length.write(length + 1024) # FIXME: +1024.
-        self.bus.regs.adc0_dma_enable.write(1)
-        while not (self.bus.regs.adc0_dma_done.read() & 0x1):
-            pass
+from peripherals.spi import *
+from peripherals.offset_dac import *
+from peripherals.frontend import *
+from peripherals.adf4360 import *
+from peripherals.had1511 import *
 
 # ADC Test -----------------------------------------------------------------------------------------
 
@@ -176,13 +33,13 @@ def adc_test(port, channel, length, downsampling, div, auto_setup, ramp=False, u
     bus = RemoteClient(port=port)
     bus.open()
 
-    spi = SPI(bus)
+    spi = SPIDriver(bus)
 
     # PLL Init
     # --------
 
     print("PLL Init...")
-    pll = ADF4360(bus, spi)
+    pll = ADF4360Driver(bus, spi)
     pll.init(
         control_value   = 0x403120,
         r_counter_value = 0x0007d1,
@@ -193,7 +50,7 @@ def adc_test(port, channel, length, downsampling, div, auto_setup, ramp=False, u
     # --------
 
     print("ADC Init...")
-    adc0 = ADC(bus, spi, n=0)
+    adc0 = HAD1511Driver(bus, spi, n=0)
     adc0.reset()
     adc0.downsampling.write(downsampling)
     if ramp:
@@ -205,12 +62,12 @@ def adc_test(port, channel, length, downsampling, div, auto_setup, ramp=False, u
     # --------------------------
 
     print("OffsetDAC Init...")
-    offsetdac = OffsetDAC(bus, spi)
+    offsetdac = OffsetDACDriver(bus, spi)
     offsetdac.init()
 
 
     print("Frontend Init...")
-    frontend = Frontend(bus, spi, [adc0, None])
+    frontend = FrontendDriver(bus, spi, [adc0, None])
 
     if auto_setup:
         def ch1_auto_setup(debug=True): # FIXME: Very dumb Auto-Setup test, mostly to verify Frontend/Gains are behaving correctly, improve.

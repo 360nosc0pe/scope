@@ -228,7 +228,7 @@ class ADF4360NCounter(ADF4360Reg):
 
 # ADF4360 ------------------------------------------------------------------------------------------
 
-class ADF4360:
+class ADF4360Driver:
     def __init__(self, bus, spi):
         self.bus = bus
         self.spi = spi
