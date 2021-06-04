@@ -317,18 +317,17 @@ def adc_test(port, channel, length, downsampling, div, auto_setup, ramp=False, u
     # ----------
 
     if csv != "":
+        # Note: Requires export LC_NUMERIC=en_US.utf-8 with GLScopeClient.
         f = open(csv, "w")
-        f.write("Time; ADC0\n")
+        f.write("Time, ADC0\n")
         for n, d in enumerate(adc_data):
-            # FIXME: Use , as decimal point and ; as separator due to scopehal limitation.
-            # https://github.com/azonenberg/scopehal/issues/494
-            line = f"{n/adc0_samplerate}; {d:f}\n"
-            line = line.replace(".", ",")
+            line = f"{n/adc0_samplerate:1.15f}, {d:f}\n"
             f.write(line)
         f.close()
 
     # Plot
     # ----
+
     if plot:
         print("Plot...")
         plt.plot(adc_data)
