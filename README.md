@@ -11,10 +11,13 @@
 
 ![License](https://img.shields.io/badge/License-BSD%202--Clause-orange.svg)
 
+
 360nosc0pe Siglent SDS 1x0xX-E FPGA bitstreams
 ==============================================
 
 This repo contains a LiteX project for an open source bitstream targetting the Siglent SDS 1x0xX-E series oscilloscopes.
+
+<p align="center"><img src="https://user-images.githubusercontent.com/1450143/120784644-9856f280-c52c-11eb-8d99-1ec916dea836.png" width="800"></p>
 
 Supported machines:
 * Siglent SDS1104X-E or SDS1204X-E (exact same hardware)
@@ -64,7 +67,5 @@ $ litex_server.py --udp --udp-ip 192.168.1.50
 [> Configure scope hardware and capture samples from CH1
 -----------
 ```sh
-$ ./software/test_adc.py --length=10000 --auto-setup --plot
-$ litescope_cli.py
-$ gtkwave dump.vcd
+$ ./test/test_adc.py --length=10000 --auto-setup --plot
 ```
