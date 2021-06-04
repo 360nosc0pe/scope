@@ -6,6 +6,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 from peripherals.spi import *
+from peripherals.had1511_adc import *
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 #                               D E S C R I P T I O N                                              #
@@ -32,6 +33,35 @@ FRONTEND_FULL_BANDWIDTH      = (1 << 5)
 VGA_LOW_RANGE  = (0 << 7)
 VGA_HIGH_RANGE = (1 << 7)
 
+# Configs.
+
+mV = 1e-3
+V  = 1
+
+class AFEConfig:
+    def __init__(self, adc, frontend, vga):
+        self.adc      = adc
+        self.frontend = frontend
+        self.vga      = vga
+
+AFEScreenDivs     = 8
+AFEVPerDivConfigs = {
+      5*mV: AFEConfig(adc=ADC_GAIN_9DB, frontend=0x78, vga=0xb9),
+     10*mV: AFEConfig(adc=ADC_GAIN_6DB, frontend=0x78, vga=0xb9),
+     20*mV: AFEConfig(adc=ADC_GAIN_4DB, frontend=0x78, vga=0xb9),
+     50*mV: AFEConfig(adc=ADC_GAIN_2DB, frontend=0x78, vga=0xad),
+    100*mV: AFEConfig(adc=ADC_GAIN_0DB, frontend=0x78, vga=0xad),
+    200*mV: AFEConfig(adc=ADC_GAIN_4DB, frontend=0x78, vga=0x27),
+    500*mV: AFEConfig(adc=ADC_GAIN_0DB, frontend=0x78, vga=0x3f),
+       1*V: AFEConfig(adc=ADC_GAIN_0DB, frontend=0x78, vga=0x1f),
+       2*V: AFEConfig(adc=ADC_GAIN_4DB, frontend=0x7a, vga=0x29),
+       5*V: AFEConfig(adc=ADC_GAIN_0DB, frontend=0x7a, vga=0x41),
+      10*V: AFEConfig(adc=ADC_GAIN_0DB, frontend=0x7a, vga=0x21),
+      20*V: AFEConfig(adc=ADC_GAIN_4DB, frontend=0x7e, vga=0x28),
+      50*V: AFEConfig(adc=ADC_GAIN_0DB, frontend=0x7e, vga=0x41),
+     100*V: AFEConfig(adc=ADC_GAIN_0DB, frontend=0x7e, vga=0x20),
+}
+
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 #                                  G A T E W A R E                                                 #
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
@@ -57,51 +87,34 @@ class FrontendDriver:
         assert 0 <= gain <= 255
         self.spi.write(SPI_CS_CH1_VGA + n, [gain])
 
-    def auto_setup(self, offsetdac, div, debug=True): # FIXME: Very dumb Auto-Setup test, mostly to verify Frontend/Gains are behaving correctly, improve.
-        print("Setting Frontend/Gain to default values...")
-        frontend_value = FRONTEND_FULL_BANDWIDTH | FRONTEND_VGA_ENABLE | FRONTEND_DC_COUPLING
-        assert div in ["100", "10", "1"]
-        if div == "100":
-            frontend_value |= FRONTEND_10_1_FIRST_DIVIDER | FRONTEND_10_1_SECOND_DIVIDER
-        if div == "10":
-            frontend_value |= FRONTEND_10_1_FIRST_DIVIDER
-        self.set_frontend(self.adc.n, frontend_value)
-        self.adc.set_reg(0x2b, 0x00)                   # 1X ADC Gain.
-        self.set_vga(self.adc.n, VGA_LOW_RANGE | 0x40) # Low VGA Gain to see Data but avoid saturation.
+    def set_range(self, req_range):
+        print(f"Requesting Range to {req_range:f}V...")
+        req_range_div = req_range/AFEScreenDivs
+        sel_range_div = 0
+        afe_config    = AFEVPerDivConfigs[100*V]
+        for r, c in AFEVPerDivConfigs.items():
+            if r > req_range_div:
+                sel_range_div = r
+                afe_config    = c
+                break
+        print(f"Selecting {sel_range_div:f}V/Div AFE Config...")
+        self.set_frontend(self.adc.n, afe_config.frontend)
+        self.adc.set_reg(0x2b, afe_config.adc)
+        self.set_vga(self.adc.n, afe_config.vga)
 
-        # Do 2 OffsetDAC/VGA calibration loops:
-        # - A First loop to find the rough OffsetDAC/Gain values.
-        # - A Second loop to refine them.
-        for loop in range(2):
-            print(f"Centering ADC Data through OffsetDAC (loop {loop})...")
-            best_offset = 0
-            best_error  = 0xff
-            for offset in range(0x2400, 0x2800, 1):
-                offsetdac.set_ch(self.adc.n, offset)
-                _min, _max = self.adc.get_range(duration=0.001)
-                _mean = _min + (_max - _min)/2
-                error = abs(_mean - 0xff/2)
-                if error < best_error:
-                    best_error  = error
-                    best_offset = offset
-                    if debug:
-                        print(f"OffsetDAC Best: 0x{offset:x} (ADC Min:{_min} Max: {_max} Mean: {_mean})")
-            print(f"Best OffsetDAC 0x{best_offset:x}")
-            offsetdac.set_ch(self.adc.n, best_offset)
-
-            print(f"Adjusting ADC Dynamic with through VGA (loop {loop})...")
-            sat_margin   = 0x10
-            best_gain    = 0
-            best_dynamic = 0
-            for gain in range(0x00, 0x80, 1):
-                self.set_vga(self.adc.n, VGA_HIGH_RANGE | gain)
-                _min, _max = self.adc.get_range(duration=0.001)
-                _dynamic = (_max - _min)
-                if (_min > sat_margin) and (_max < (0xff - sat_margin)):
-                    if (_dynamic > best_dynamic):
-                        best_gain    = gain
-                        best_dynamic = _dynamic
-                        if debug:
-                            print(f"VGA Best: 0x{best_gain:x} (ADC Min:{_min} Max: {_max} Diff: {_dynamic})")
-            print(f"Best VGA Gain: 0x{best_gain:x}")
-            self.set_vga(self.adc.n, VGA_HIGH_RANGE | best_gain)
+    def center(self, offsetdac, debug=True):
+        print(f"Centering ADC Data through OffsetDAC...")
+        best_offset = 0
+        best_error  = 0xff
+        for offset in range(0x2500, 0x2700, 8):
+            offsetdac.set_ch(self.adc.n, offset)
+            _min, _max = self.adc.get_range(duration=0.001)
+            _mean = _min + (_max - _min)/2
+            error = abs(_mean - 0xff/2)
+            if error < best_error:
+                best_error  = error
+                best_offset = offset
+                if debug:
+                    print(f"OffsetDAC Best: 0x{offset:x} (ADC Min:{_min} Max: {_max} Mean: {_mean})")
+        print(f"Best OffsetDAC 0x{best_offset:x}")
+        offsetdac.set_ch(self.adc.n, best_offset)

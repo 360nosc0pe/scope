@@ -33,7 +33,7 @@ def adc_test(port,
     # ADC Parameters.
     adc_channel, adc_samples, adc_downsampling, adc_mode,
     # AFE Parameters.
-    afe_divider, afe_auto_setup,
+    afe_range, afe_center,
     # Upload Parameters.
     upload_mode="udp",
     # Dump Parameters.
@@ -78,8 +78,9 @@ def adc_test(port,
 
     print("- Frontend Init...")
     frontend = FrontendDriver(bus, spi, adc)
-    if afe_auto_setup:
-        frontend.auto_setup(offsetdac=offsetdac, div=afe_divider)
+    frontend.set_range(afe_range)
+    if afe_center:
+        frontend.center(offsetdac)
 
     # ADC Statistics / Capture
     # ------------------------
@@ -138,8 +139,8 @@ def main():
     parser.add_argument("--adc-mode",         default="capture",           help="ADC Mode: capture (default), ramp.")
 
     # AFE Parameters.
-    parser.add_argument("--afe-divider",    default="100",       help="Analog Front-End Divider: 100 (default), 10 or 1.")
-    parser.add_argument("--afe-auto-setup", action="store_true", help="Enable Analog Front-End Auto-Setup.")
+    parser.add_argument("--afe-range",      default=10,          type=float, help="Analog Front-End Dynamic Range: 5mV to 800V (default=10V).")
+    parser.add_argument("--afe-center",     action="store_true",             help="Center Signal with Offset DAC.")
 
     # Upload Parameters.
     parser.add_argument("--upload-mode", default="udp", help="Data upload mode: udp (default) or etherbone.")
@@ -161,8 +162,8 @@ def main():
         adc_downsampling = args.adc_downsampling,
         adc_mode         = args.adc_mode,
         # AFE.
-        afe_divider      = args.afe_divider,
-        afe_auto_setup   = args.afe_auto_setup,
+        afe_range        = args.afe_range,
+        afe_center       = args.afe_center,
         # Upload.
         upload_mode      = args.upload_mode,
         # Dump.
