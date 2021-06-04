@@ -158,7 +158,7 @@ def main():
         host_udp_port = args.host_udp_port,
         with_analyzer = args.with_analyzer
     )
-    builder = Builder(soc, csr_csv="software/csr.csv")
+    builder = Builder(soc, csr_csv="test/csr.csv")
     vns = builder.build(
         sim_config  = sim_config,
         trace       = args.trace,

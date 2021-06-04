@@ -326,7 +326,7 @@ class ScopeSoC(SoCCore):
             self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals,
                 depth        = 1024,
                 clock_domain = "sys",
-                csr_csv      = "software/analyzer.csv"
+                csr_csv      = "test/analyzer.csv"
             )
 
 # Build --------------------------------------------------------------------------------------------
@@ -348,7 +348,7 @@ def main():
         with_analyzer = args.with_analyzer
     )
 
-    builder = Builder(soc, csr_csv="software/csr.csv")
+    builder = Builder(soc, csr_csv="test/csr.csv")
     builder.build(run=args.build)
 
     if args.load:
