@@ -14,14 +14,14 @@ import socket
 
 from litex import RemoteClient
 
-# DRAM Upload Test ---------------------------------------------------------------------------------
+# Upload Test --------------------------------------------------------------------------------------
 
-def dram_upload_test(port, base, length):
+def upload_test(port, base, length):
 
     bus = RemoteClient(port=port)
     bus.open()
 
-    class DRAMUpload:
+    class MemUpload:
         def __init__(self, bus, chunk_length=1024):
             self.bus          = bus
             self.chunk_length = chunk_length
@@ -53,15 +53,15 @@ def dram_upload_test(port, base, length):
 
     reference = [i%256 for i in range(length)]
 
-    dram_upload = DRAMUpload(bus)
+    mem_upload = MemUpload(bus)
 
-    print("Filling DRAM with Reference (over Etherbone)...")
-    dram_upload.fill(base, reference)
+    print("Filling Memory with Reference (over Etherbone)...")
+    mem_upload.fill(base, reference)
 
-    print("Uploading DRAM data (over UDP)...")
-    data = dram_upload.upload(base, length)
+    print("Uploading Memory data (over UDP)...")
+    data = mem_upload.upload(base, length)
 
-    print("Checking DRAM data against Reference...")
+    print("Checking Uploaded data against Reference...")
     print("Success") if (set(data) == set(reference)) else print("Fail")
 
     #print(data)
@@ -72,15 +72,15 @@ def dram_upload_test(port, base, length):
 # Run ----------------------------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description="DRAM Upload test utility")
+    parser = argparse.ArgumentParser(description="Upload test utility")
     parser.add_argument("--port",        default="1234",           help="Host bind port")
-    parser.add_argument("--base",        default=0,      type=int, help="Upload Test DRAM base.")
+    parser.add_argument("--base",        default=0,      type=int, help="Upload Test base (in DRAM).")
     parser.add_argument("--length",      default=1024,   type=int, help="Upload Test length (in bytes).")
     args = parser.parse_args()
 
     port = int(args.port, 0)
 
-    dram_upload_test(port=port,
+    upload_test(port=port,
         base   = args.base,
         length = args.length
     )
