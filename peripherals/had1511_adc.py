@@ -315,7 +315,7 @@ class HAD1511ADCDriver:
         self.control.write(HAD1511_CORE_CONTROL_FRAME_RST)
 
     def set_reg(self, reg, value):
-        self.spi.write(SPI_CS_ADC0 + self.n, [reg, (value >> 8) & 0xff, value & 0xff])
+        self.spi.write(SPI_CS_ADC0 + self.n//2, [reg, (value >> 8) & 0xff, value & 0xff])
 
     def set_gain(self, gain):
         if self.mode == "single":
