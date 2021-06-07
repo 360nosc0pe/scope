@@ -304,6 +304,14 @@ class HAD1511ADCDriver:
         self.dma_done   = getattr(bus.regs, f"adc{n//2}_dma_done")
 
     def reset(self):
+        # Reset ADC.
+        self.set_reg(0x00, 0x0001) # Soft Reset.
+        time.sleep(0.1)
+        self.set_reg(0x0f, 0x2000) # Power-Down.
+        time.sleep(0.1)
+        self.set_reg(0x0f, 0x0000) # Power-On.
+
+        # Reset Core.
         self.control.write(HAD1511_CORE_CONTROL_FRAME_RST)
 
     def set_reg(self, reg, value):
@@ -315,45 +323,42 @@ class HAD1511ADCDriver:
         if self.mode == "dual":
             self.set_reg(0x2b, (gain << 4) | (gain << 0)) # Note: Apply similar gains on the two channels.
 
+    def set_clk_divider(self, divider=1):
+        self.set_reg()
+
     def data_mode(self):
-        self.set_reg(0, 0x0001)
-        time.sleep(.1)
-        self.set_reg(0xF, 0x200)
-        time.sleep(.1)
-        self.set_reg(0x31, 0x0001)
-        #self.set_reg(0x53, 0x0000)
-        #self.set_reg(0x31, 0x0008)
-        #self.set_reg(0x53, 0x0004)
+        self.set_reg(0x0f, 0x0200) # Power-Down.
+        self.set_reg(0x31, 0x0001) # Apply Mode. (Single Channel ADC1..4 Interleaving / X1 Divider).
+        self.set_reg(0x0f, 0x0000) # Power-Up.
 
-        self.set_reg(0x0F, 0x0000)
-        self.set_reg(0x30, 0x0008)
-        self.set_reg(0x3A, 0x0202)
-        self.set_reg(0x3B, 0x0202)
-        self.set_reg(0x33, 0x0001)
-        #self.set_reg(0x2B, 0x0222)
-        self.set_reg(0x2A, 0x2222)
-        self.set_reg(0x25, 0x0000)
-        self.set_reg(0x31, 0x0001) # clk_divide = /1, single channel interleaving ADC1..4
+        self.set_reg(0x25, 0x0000) # Disable Patterns.
 
-    def ramp(self):
-        self.set_reg(0x25, 0x0040)
+        self.set_reg(0x30, 0x0008) # Clk Jitter Adjustement.
+        self.set_reg(0x3a, 0x0202) # In1/In1 Input on ADC1/2.
+        self.set_reg(0x3b, 0x0202) # In1/In1 Input on ADC3/4.
+        self.set_reg(0x33, 0x0001) # Coarse Gain in X mode.
+        self.set_reg(0x2a, 0x2222) # X2 Gain on all ADCs.
 
-    def single(self, pattern):
-        self.set_reg(0x25, 0x0010)
-        self.set_reg(0x26, pattern)
+    def enable_ramp_pattern(self):
+        self.set_reg(0x25, 0x0040) # Enable Full-Scale Ramp.
 
-    def dual(self, pattern0, pattern1):
-        self.set_reg(0x25, 0x0020)
-        self.set_reg(0x26, pattern0)
-        self.set_reg(0x27, pattern1)
+    def enable_single_pattern(self, pattern):
+        self.set_reg(0x26, pattern) # Set Pattern.
+        self.set_reg(0x25, 0x0010)  # Enable Single Pattern.
 
-    def pat_deskew(self):
-        self.set_reg(0x25, 0x0000)
-        self.set_reg(0x45, 2)
+    def enable_dual_pattern(self, patterns):
+        assert len(patterns) == 2
+        self.set_reg(0x26, patterns[0]) # Set First Pattern.
+        self.set_reg(0x27, patterns[1]) # Programm Second Pattern.
+        self.set_reg(0x25, 0x0020)      # Enable Dual Pattern.
 
-    def pat_sync(self):
-        self.set_reg(0x25, 0x0000)
-        self.set_reg(0x45, 1)
+    def enable_deskew_pattern(self):
+        self.set_reg(0x25, 0x0000) # Disable Patterns.
+        self.set_reg(0x45, 0x0002) # Enable Deskew Pattern.
+
+    def enable_sync_pattern(self):
+        self.set_reg(0x25, 0x0000) # Disable Patterns.
+        self.set_reg(0x45, 0x0001) # Enable Deskew Pattern.
 
     def get_range(self, duration=0.5):
         self.control.write(HAD1511_CORE_CONTROL_STAT_RST)

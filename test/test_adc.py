@@ -63,7 +63,9 @@ def adc_test(port,
     adc = HAD1511ADCDriver(bus, spi, n=adc_channel-1)
     adc.reset()
     adc.downsampling.write(adc_downsampling)
-    adc.data_mode() if adc_mode == "capture" else adc.ramp()
+    adc.data_mode()
+    if adc_mode == "ramp":
+        adc.enable_ramp_pattern()
 
     # Analog Front-End (AFE) Init...
     # ------------------------------
@@ -92,6 +94,7 @@ def adc_test(port,
     adc_samplerate   = adc.get_samplerate()
     print(f"- Min: {adc_min}")
     print(f"- Max: {adc_max}")
+    print(f"- Dynamic: {adc_max - adc_min}")
     print(f"- Samplerate: ~{adc_samplerate/1e6}MSa/s ({adc_samplerate*8/1e9}Gb/s)")
 
     print("ADC Data Capture (to DRAM)...")
