@@ -275,7 +275,7 @@ class ScopeSoC(SoCCore):
 
         # ADCs + DMAs.
         for i in range(2):
-            adc  = HAD1511ADC(self.platform.request("adc", i), sys_clk_freq)
+            adc  = HAD1511ADC(self.platform.request("adc", i), sys_clk_freq, polarity=1)
             port = self.sdram.crossbar.get_port()
             conv = stream.Converter(64, port.data_width)
             dma  = LiteDRAMDMAWriter(self.sdram.crossbar.get_port(), fifo_depth=16, with_csr=True)

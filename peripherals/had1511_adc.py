@@ -57,7 +57,7 @@ had1511_phy_layout = ["fclk_p", "fclk_n", "lclk_p", "lclk_n", "d_p", "d_n"]
 # HAD1511 ADC --------------------------------------------------------------------------------------
 
 class HAD1511ADC(Module, AutoCSR):
-    def __init__(self, pads, sys_clk_freq, clock_domain="sys"):
+    def __init__(self, pads, sys_clk_freq, polarity=0, clock_domain="sys"):
         # Parameters.
         nchannels = len(pads.d_p)
         for name in had1511_phy_layout:
@@ -220,7 +220,7 @@ class HAD1511ADC(Module, AutoCSR):
                      **{f"o_Q{n+1}": d[8-1-n] for n in range(8)},
                 )
             ]
-            self.comb += adc_source.data[8*i:8*(i+1)].eq(d)
+            self.comb += adc_source.data[8*i:8*(i+1)].eq(d if polarity == 0 else (d ^ 0xff))
 
         # Clock Domain Crossing.
         # ----------------------
