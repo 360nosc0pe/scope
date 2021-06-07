@@ -81,8 +81,8 @@ class FrontendDriver:
         self.frontend_values = [FRONTEND_DEFAULT for i in range(4)]
 
     def set_frontend(self, n, data):
-        self.frontend_values[4-1-n] |= data # /!\ FIXME!
-        self.spi.write(SPI_CS_FRONTEND, [0x00] + self.frontend_values)
+        self.frontend_values[n] |= data # /!\ FIXME!
+        self.spi.write(SPI_CS_FRONTEND, [0x00] + list(reversed(self.frontend_values)))
 
     def set_vga(self, n, gain):
         assert 0 <= gain <= 255
@@ -90,14 +90,14 @@ class FrontendDriver:
 
     def set_coupling(self, coupling):
         assert coupling in ["dc", "ac"]
-        frontend_value = self.frontend_values[4-1-self.adc.n] & (~FRONTEND_DC_COUPLING)
+        frontend_value = self.frontend_values[self.adc.n] & (~FRONTEND_DC_COUPLING)
         if coupling == "dc":
             frontend_value |= FRONTEND_DC_COUPLING
         self.set_frontend(self.adc.n, frontend_value)
 
     def set_bwl(self, bwl):
         assert bwl in ["full", "20mhz"]
-        frontend_value = self.frontend_values[4-1-self.adc.n] & (~FRONTEND_FULL_BANDWIDTH)
+        frontend_value = self.frontend_values[self.adc.n] & (~FRONTEND_FULL_BANDWIDTH)
         if bwl == "full":
             frontend_value |= FRONTEND_FULL_BANDWIDTH
         self.set_frontend(self.adc.n, frontend_value)
