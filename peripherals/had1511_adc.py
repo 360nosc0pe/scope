@@ -334,8 +334,9 @@ class HAD1511ADCDriver:
         self.set_reg(0x25, 0x0000) # Disable Patterns.
 
         self.set_reg(0x30, 0x0008) # Clk Jitter Adjustement.
-        self.set_reg(0x3a, 0x0202) # In1/In1 Input on ADC1/2.
-        self.set_reg(0x3b, 0x0202) # In1/In1 Input on ADC3/4.
+        inp_sel_adcx = (1 << ((self.n%2)*3 + 1))
+        self.set_reg(0x3a, (inp_sel_adcx << 8) | inp_sel_adcx) # Connect Input to ADC1/2.
+        self.set_reg(0x3b, (inp_sel_adcx << 8) | inp_sel_adcx) # Connect Input to ADC3/4.
         self.set_reg(0x33, 0x0001) # Coarse Gain in X mode.
         self.set_reg(0x2a, 0x2222) # X2 Gain on all ADCs.
 

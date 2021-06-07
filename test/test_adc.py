@@ -41,7 +41,7 @@ def adc_test(port,
     # Plot Parmeters.
     plot=False):
 
-    assert adc_channel in [1, 3] # FIXME
+    assert adc_channel in [1, 2, 3, 4]
     bus = RemoteClient(port=port)
     bus.open()
 
