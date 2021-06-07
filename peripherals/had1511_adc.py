@@ -28,19 +28,23 @@ from peripherals.downsampling import DownSampling
 #                               D E F I N I T I O N S                                              #
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
-ADC_CONTROL_FRAME_RST = (1 << 0)
-ADC_CONTROL_DELAY_RST = (1 << 1)
-ADC_CONTROL_DELAY_INC = (1 << 2)
-ADC_CONTROL_STAT_RST  = (1 << 3)
+# Core.
 
-ADC_RANGE_STAT_MIN    = (1 << 0)
-ADC_RANGE_STAT_MAX    = (1 << 8)
+HAD1511_CORE_CONTROL_FRAME_RST = (1 << 0)
+HAD1511_CORE_CONTROL_DELAY_RST = (1 << 1)
+HAD1511_CORE_CONTROL_DELAY_INC = (1 << 2)
+HAD1511_CORE_CONTROL_STAT_RST  = (1 << 3)
 
-ADC_GAIN_0DB = 0
-ADC_GAIN_2DB = 2
-ADC_GAIN_4DB = 4
-ADC_GAIN_6DB = 6
-ADC_GAIN_9DB = 9
+HAD1511_CORE_RANGE_STAT_MIN    = (1 << 0)
+HAD1511_CORE_RANGE_STAT_MAX    = (1 << 8)
+
+# ADC.
+
+HAD1511_ADC_GAIN_0DB = 0
+HAD1511_ADC_GAIN_2DB = 2
+HAD1511_ADC_GAIN_4DB = 4
+HAD1511_ADC_GAIN_6DB = 6
+HAD1511_ADC_GAIN_9DB = 9
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 #                                  G A T E W A R E                                                 #
@@ -48,7 +52,7 @@ ADC_GAIN_9DB = 9
 
 # Layouts ------------------------------------------------------------------------------------------
 
-hmcad1511_phy_layout = ["fclk_p", "fclk_n", "lclk_p", "lclk_n", "d_p", "d_n"]
+had1511_phy_layout = ["fclk_p", "fclk_n", "lclk_p", "lclk_n", "d_p", "d_n"]
 
 # HAD1511 ADC --------------------------------------------------------------------------------------
 
@@ -56,7 +60,7 @@ class HAD1511ADC(Module, AutoCSR):
     def __init__(self, pads, sys_clk_freq, clock_domain="sys"):
         # Parameters.
         nchannels = len(pads.d_p)
-        for name in hmcad1511_phy_layout:
+        for name in had1511_phy_layout:
             assert hasattr(pads, name)
 
         # ADC stream.
@@ -282,10 +286,12 @@ class HAD1511ADC(Module, AutoCSR):
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
 class HAD1511ADCDriver:
-    def __init__(self, bus, spi, n):
+    def __init__(self, bus, spi, n, mode="single"):
+        assert mode in ["single", "dual"]
         self.bus     = bus
         self.spi     = spi
         self.n       = n
+        self.mode    = mode
 
         self.control      = getattr(bus.regs, f"adc{n//2}_control")
         self.downsampling = getattr(bus.regs, f"adc{n//2}_downsampling")
@@ -298,10 +304,16 @@ class HAD1511ADCDriver:
         self.dma_done   = getattr(bus.regs, f"adc{n//2}_dma_done")
 
     def reset(self):
-        self.control.write(ADC_CONTROL_FRAME_RST)
+        self.control.write(HAD1511_CORE_CONTROL_FRAME_RST)
 
     def set_reg(self, reg, value):
         self.spi.write(SPI_CS_ADC0 + self.n, [reg, (value >> 8) & 0xff, value & 0xff])
+
+    def set_gain(self, gain):
+        if self.mode == "single":
+            self.set_reg(0x2b, (gain << 8))
+        if self.mode == "dual":
+            self.set_reg(0x2b, (gain << 4) | (gain << 0)) # Note: Apply similar gains on the two channels.
 
     def data_mode(self):
         self.set_reg(0, 0x0001)
@@ -344,14 +356,14 @@ class HAD1511ADCDriver:
         self.set_reg(0x45, 1)
 
     def get_range(self, duration=0.5):
-        self.control.write(ADC_CONTROL_STAT_RST)
+        self.control.write(HAD1511_CORE_CONTROL_STAT_RST)
         time.sleep(duration)
         adc_min = (self.range.read() >> 0) & 0xff
         adc_max = (self.range.read() >> 8) & 0xff
         return adc_min, adc_max
 
     def get_samplerate(self, duration=0.5):
-        self.control.write(ADC_CONTROL_STAT_RST)
+        self.control.write(HAD1511_CORE_CONTROL_STAT_RST)
         time.sleep(duration)
         adc_count = self.count.read()
         return adc_count/duration

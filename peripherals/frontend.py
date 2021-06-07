@@ -47,20 +47,20 @@ class AFEConfig:
 
 AFEScreenDivs     = 8
 AFEVPerDivConfigs = {
-      5*mV: AFEConfig(adc=ADC_GAIN_9DB, frontend=FRONTEND_VGA_ENABLE, vga=0xb9),
-     10*mV: AFEConfig(adc=ADC_GAIN_6DB, frontend=FRONTEND_VGA_ENABLE, vga=0xb9),
-     20*mV: AFEConfig(adc=ADC_GAIN_4DB, frontend=FRONTEND_VGA_ENABLE, vga=0xb9),
-     50*mV: AFEConfig(adc=ADC_GAIN_2DB, frontend=FRONTEND_VGA_ENABLE, vga=0xad),
-    100*mV: AFEConfig(adc=ADC_GAIN_0DB, frontend=FRONTEND_VGA_ENABLE, vga=0xad),
-    200*mV: AFEConfig(adc=ADC_GAIN_4DB, frontend=FRONTEND_VGA_ENABLE, vga=0x27),
-    500*mV: AFEConfig(adc=ADC_GAIN_0DB, frontend=FRONTEND_VGA_ENABLE, vga=0x3f),
-       1*V: AFEConfig(adc=ADC_GAIN_0DB, frontend=FRONTEND_VGA_ENABLE, vga=0x1f),
-       2*V: AFEConfig(adc=ADC_GAIN_4DB, frontend=FRONTEND_VGA_ENABLE | FRONTEND_10_1_FIRST_DIVIDER, vga=0x29),
-       5*V: AFEConfig(adc=ADC_GAIN_0DB, frontend=FRONTEND_VGA_ENABLE | FRONTEND_10_1_FIRST_DIVIDER, vga=0x41),
-      10*V: AFEConfig(adc=ADC_GAIN_0DB, frontend=FRONTEND_VGA_ENABLE | FRONTEND_10_1_FIRST_DIVIDER, vga=0x21),
-      20*V: AFEConfig(adc=ADC_GAIN_4DB, frontend=FRONTEND_VGA_ENABLE | FRONTEND_10_1_FIRST_DIVIDER | FRONTEND_10_1_SECOND_DIVIDER, vga=0x28),
-      50*V: AFEConfig(adc=ADC_GAIN_0DB, frontend=FRONTEND_VGA_ENABLE | FRONTEND_10_1_FIRST_DIVIDER | FRONTEND_10_1_SECOND_DIVIDER, vga=0x41),
-     100*V: AFEConfig(adc=ADC_GAIN_0DB, frontend=FRONTEND_VGA_ENABLE | FRONTEND_10_1_FIRST_DIVIDER | FRONTEND_10_1_SECOND_DIVIDER, vga=0x20),
+      5*mV: AFEConfig(adc=HAD1511_ADC_GAIN_9DB, frontend=FRONTEND_VGA_ENABLE, vga=0xb9),
+     10*mV: AFEConfig(adc=HAD1511_ADC_GAIN_6DB, frontend=FRONTEND_VGA_ENABLE, vga=0xb9),
+     20*mV: AFEConfig(adc=HAD1511_ADC_GAIN_4DB, frontend=FRONTEND_VGA_ENABLE, vga=0xb9),
+     50*mV: AFEConfig(adc=HAD1511_ADC_GAIN_2DB, frontend=FRONTEND_VGA_ENABLE, vga=0xad),
+    100*mV: AFEConfig(adc=HAD1511_ADC_GAIN_0DB, frontend=FRONTEND_VGA_ENABLE, vga=0xad),
+    200*mV: AFEConfig(adc=HAD1511_ADC_GAIN_4DB, frontend=FRONTEND_VGA_ENABLE, vga=0x27),
+    500*mV: AFEConfig(adc=HAD1511_ADC_GAIN_0DB, frontend=FRONTEND_VGA_ENABLE, vga=0x3f),
+       1*V: AFEConfig(adc=HAD1511_ADC_GAIN_0DB, frontend=FRONTEND_VGA_ENABLE, vga=0x1f),
+       2*V: AFEConfig(adc=HAD1511_ADC_GAIN_4DB, frontend=FRONTEND_VGA_ENABLE | FRONTEND_10_1_FIRST_DIVIDER, vga=0x29),
+       5*V: AFEConfig(adc=HAD1511_ADC_GAIN_0DB, frontend=FRONTEND_VGA_ENABLE | FRONTEND_10_1_FIRST_DIVIDER, vga=0x41),
+      10*V: AFEConfig(adc=HAD1511_ADC_GAIN_0DB, frontend=FRONTEND_VGA_ENABLE | FRONTEND_10_1_FIRST_DIVIDER, vga=0x21),
+      20*V: AFEConfig(adc=HAD1511_ADC_GAIN_4DB, frontend=FRONTEND_VGA_ENABLE | FRONTEND_10_1_FIRST_DIVIDER | FRONTEND_10_1_SECOND_DIVIDER, vga=0x28),
+      50*V: AFEConfig(adc=HAD1511_ADC_GAIN_0DB, frontend=FRONTEND_VGA_ENABLE | FRONTEND_10_1_FIRST_DIVIDER | FRONTEND_10_1_SECOND_DIVIDER, vga=0x41),
+     100*V: AFEConfig(adc=HAD1511_ADC_GAIN_0DB, frontend=FRONTEND_VGA_ENABLE | FRONTEND_10_1_FIRST_DIVIDER | FRONTEND_10_1_SECOND_DIVIDER, vga=0x20),
 }
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
@@ -116,7 +116,7 @@ class FrontendDriver:
         afe_resolution = (sel_range_div*AFEScreenDivs)/256
 
         self.set_frontend(self.adc.n, afe_config.frontend)
-        self.adc.set_reg(0x2b, afe_config.adc)
+        self.adc.set_gain(afe_config.adc)
         self.set_vga(self.adc.n, afe_config.vga)
 
         return afe_resolution
