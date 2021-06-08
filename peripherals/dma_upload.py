@@ -65,29 +65,24 @@ class DMAUpload(Module, AutoCSR):
 #                                  S O F T W A R E                                                 #
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
-def udp_data_retrieve(bus, base, length):
-    dma_data = []
-    offset   = 0
-    sock     = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind(("192.168.1.100", 2000))
-    while length > 0:
-        bus.regs.dma_upload_dma_reader_enable.write(0)
-        bus.regs.dma_upload_dma_reader_base.write(base + offset)
-        bus.regs.dma_upload_dma_reader_length.write(1024)
-        bus.regs.dma_upload_dma_reader_enable.write(1)
-        data, _ = sock.recvfrom(1024)
-        for b in data:
-            dma_data.append(b)
-        length -= len(data)
-        offset += len(data)
-    return dma_data
+class DMAUploadDriver:
+    def __init__(self, bus, udp_port=2000):
+        self.bus      = bus
+        self.udp_port = udp_port
 
-def etherbone_data_retrieve(bus, base, length):
-    dma_data = []
-    for i in range(length//4):
-        word = bus.read(bus.mems.main_ram.base + base + 4*i)
-        dma_data.append((word >> 0)  & 0xff)
-        dma_data.append((word >> 8)  & 0xff)
-        dma_data.append((word >> 16) & 0xff)
-        dma_data.append((word >> 24) & 0xff)
-    return dma_data
+    def run(self, base, length):
+        dma_data = []
+        offset   = 0
+        sock     = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind(("0.0.0.0", self.udp_port))
+        while length > 0:
+            self.bus.regs.dma_upload_dma_reader_enable.write(0)
+            self.bus.regs.dma_upload_dma_reader_base.write(base + offset)
+            self.bus.regs.dma_upload_dma_reader_length.write(1024)
+            self.bus.regs.dma_upload_dma_reader_enable.write(1)
+            data, _ = sock.recvfrom(1024)
+            for b in data:
+                dma_data.append(b)
+            length -= len(data)
+            offset += len(data)
+        return dma_data

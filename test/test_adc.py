@@ -34,8 +34,6 @@ def adc_test(port,
     adc_channel, adc_samples, adc_downsampling, adc_mode,
     # AFE Parameters.
     afe_range, afe_coupling, afe_bwl, afe_center,
-    # Upload Parameters.
-    upload_mode="udp",
     # Dump Parameters.
     dump="",
     # Plot Parmeters.
@@ -101,12 +99,8 @@ def adc_test(port,
     adc.capture(base=0x0000_0000, length=adc_samples)
 
     print("ADC Data Retrieve (from DRAM)...")
-    if upload_mode == "udp":
-        adc_data = udp_data_retrieve(bus, 0x0000_0000, adc_samples)
-    elif upload_mode == "etherbone":
-        adc_data = etherbone_data_retrieve(bus, adc_samples)
-    else:
-        raise ValueError
+    dma_upload = DMAUploadDriver(bus)
+    adc_data   = dma_upload.run(base=0x0000_0000, length=adc_samples)
     if len(adc_data) > adc_samples:
         adc_data = adc_data[:adc_samples]
 
@@ -149,9 +143,6 @@ def main():
     parser.add_argument("--afe-bwl",        default="full",                  help="Analog Front-End Bandwidth Limitation: full (default) or 20mhz")
     parser.add_argument("--afe-center",     action="store_true",             help="Center Signal with Offset DAC.")
 
-    # Upload Parameters.
-    parser.add_argument("--upload-mode", default="udp", help="Data upload mode: udp (default) or etherbone.")
-
     # Dump Parameters.
     parser.add_argument("--dump", default="", help="Dump captured data to specified CSV file.")
 
@@ -173,8 +164,6 @@ def main():
         afe_coupling     = args.afe_coupling,
         afe_bwl          = args.afe_bwl,
         afe_center       = args.afe_center,
-        # Upload.
-        upload_mode      = args.upload_mode,
         # Dump.
         dump             = args.dump,
         # Plot.
