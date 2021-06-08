@@ -29,10 +29,10 @@ from litedram.frontend.dma import LiteDRAMDMAWriter
 
 from liteeth.phy.mii import LiteEthPHYMII
 
+from peripherals.frontpanel import FrontpanelLeds, FrontpanelButtons
 from peripherals.offset_dac import OffsetDAC
 from peripherals.had1511_adc import HAD1511ADC
-
-from peripherals.frontpanel import FrontpanelLeds, FrontpanelButtons
+from peripherals.trigger import Trigger
 from peripherals.dma_upload import DMAUpload
 
 from litescope import LiteScopeAnalyzer
@@ -273,16 +273,22 @@ class ScopeSoC(SoCCore):
         pads.miso = Signal()
         self.submodules.spi = SPIMaster(pads, 48, self.sys_clk_freq, 8e6)
 
+        # Trigger.
+        self.submodules.trigger = Trigger()
+
         # ADCs + DMAs.
         for i in range(2):
             adc  = HAD1511ADC(self.platform.request("adc", i), sys_clk_freq, polarity=1)
+            gate = stream.Gate([("data", 64)], sink_ready_when_disabled=True)
             port = self.sdram.crossbar.get_port()
             conv = stream.Converter(64, port.data_width)
             dma  = LiteDRAMDMAWriter(self.sdram.crossbar.get_port(), fifo_depth=16, with_csr=True)
-            setattr(self.submodules, f"adc{i}",      adc)
+            setattr(self.submodules, f"adc{i}",       adc)
+            setattr(self.submodules, f"adc{i}_gate", gate)
             setattr(self.submodules, f"adc{i}_conv", conv)
-            setattr(self.submodules, f"adc{i}_dma",  dma)
-            self.submodules += stream.Pipeline(adc, conv, dma)
+            setattr(self.submodules, f"adc{i}_dma",   dma)
+            self.submodules += stream.Pipeline(adc, gate, conv, dma)
+            self.comb += gate.enable.eq(self.trigger.enable)
 
         # DMA Upload -------------------------------------------------------------------------------
         self.submodules.dma_upload = DMAUpload(

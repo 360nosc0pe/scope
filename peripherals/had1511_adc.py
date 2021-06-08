@@ -298,11 +298,6 @@ class HAD1511ADCDriver:
         self.range        = getattr(bus.regs, f"adc{n//2}_range")
         self.count        = getattr(bus.regs, f"adc{n//2}_count")
 
-        self.dma_enable = getattr(bus.regs, f"adc{n//2}_dma_enable")
-        self.dma_base   = getattr(bus.regs, f"adc{n//2}_dma_base")
-        self.dma_length = getattr(bus.regs, f"adc{n//2}_dma_length")
-        self.dma_done   = getattr(bus.regs, f"adc{n//2}_dma_done")
-
     def reset(self):
         # Reset ADC.
         self.set_reg(0x00, 0x0001) # Soft Reset.
@@ -374,10 +369,26 @@ class HAD1511ADCDriver:
         adc_count = self.count.read()
         return adc_count/duration
 
-    def capture(self, base, length):
+class HAD1511DMADriver:
+    def __init__(self, bus, n):
+        self.bus     = bus
+        self.n       = n
+
+        self.dma_enable = getattr(bus.regs, f"adc{n//2}_dma_enable")
+        self.dma_base   = getattr(bus.regs, f"adc{n//2}_dma_base")
+        self.dma_length = getattr(bus.regs, f"adc{n//2}_dma_length")
+        self.dma_done   = getattr(bus.regs, f"adc{n//2}_dma_done")
+
+    def reset(self):
+        self.dma_enable.write(0)
+
+
+    def start(self, base, length):
         self.dma_enable.write(0)
         self.dma_base.write(base)
         self.dma_length.write(length + 1024) # FIXME: +1024.
         self.dma_enable.write(1)
+
+    def wait(self):
         while not (self.dma_done.read() & 0x1):
             pass

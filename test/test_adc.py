@@ -23,6 +23,7 @@ from peripherals.spi import *
 from peripherals.spi         import *
 from peripherals.offset_dac  import *
 from peripherals.frontend    import *
+from peripherals.trigger     import *
 from peripherals.adf4360_pll import *
 from peripherals.had1511_adc import *
 from peripherals.dma_upload import *
@@ -84,6 +85,17 @@ def adc_test(port,
     if afe_center:
         frontend.center(offsetdac)
 
+    # Trigger
+    # -------
+
+    trigger = TriggerDriver(bus)
+    trigger.reset()
+
+    # HAD1511 DMA Init
+    # ----------------
+    adc_dma = HAD1511DMADriver(bus, n=adc_channel-1)
+    adc_dma.reset()
+
     # ADC Statistics / Capture
     # ------------------------
 
@@ -96,7 +108,9 @@ def adc_test(port,
     print(f"- Samplerate: ~{adc_samplerate/1e6}MSa/s ({adc_samplerate*8/1e9}Gb/s)")
 
     print("ADC Data Capture (to DRAM)...")
-    adc.capture(base=0x0000_0000, length=adc_samples)
+    adc_dma.start(base=0x0000_0000, length=adc_samples)
+    trigger.enable()
+    adc_dma.wait()
 
     print("ADC Data Retrieve (from DRAM)...")
     dma_upload = DMAUploadDriver(bus)
