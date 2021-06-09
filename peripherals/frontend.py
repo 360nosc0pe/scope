@@ -128,7 +128,7 @@ class FrontendDriver:
         best_error  = 0xff
         for offset in range(0x2500, 0x2700, 8):
             offsetdac.set_ch(self.n, offset)
-            _min, _max = self.adc.get_range(duration=0.001)
+            _min, _max = self.adc.get_range(n=self.n, duration=0.001)
             _mean = _min + (_max - _min)/2
             error = abs(_mean - 0xff/2)
             if error < best_error:

@@ -76,8 +76,10 @@ class HAD1511ADC(Module, AutoCSR):
         self._status       = CSRStatus() # Unused (for now).
         self._downsampling = CSRStorage(32, description="ADC Downsampling ratio.")
         self._range        = CSRStatus(fields=[
-            CSRField("min", size=8, offset=0, description="ADC Min value since last stat_rst."),
-            CSRField("max", size=8, offset=8, description="ADC Max value since last stat_rst."),
+            CSRField("min01", size=8, offset= 0, description="ADC0/1 Min value since last stat_rst."),
+            CSRField("max01", size=8, offset= 8, description="ADC0/1 Max value since last stat_rst."),
+            CSRField("min23", size=8, offset=16, description="ADC2/3 Min value since last stat_rst."),
+            CSRField("max23", size=8, offset=24, description="ADC2/3 Max value since last stat_rst."),
         ])
         self._count        = CSRStatus(32, description="ADC samples count since last stat_rst.")
 
@@ -244,27 +246,28 @@ class HAD1511ADC(Module, AutoCSR):
         # -----------
 
         # Min/Max Range.
-        adc_min   = self._range.fields.min
-        adc_max   = self._range.fields.max
-        adc_value = source.data[:8]
-        self.sync += [
-            # On a valid cycle:
-            If(source.valid,
-                # Compute Min.
-                If(adc_value >= adc_max,
-                    adc_max.eq(adc_value)
+        for adc in ["01", "23"]:
+            adc_min   = getattr(self._range.fields, f"min{adc}")
+            adc_max   = getattr(self._range.fields, f"max{adc}")
+            adc_value = {"01": source.data[:8], "23": source.data[-8:]}[adc]
+            self.sync += [
+                # On a valid cycle:
+                If(source.valid,
+                    # Compute Min.
+                    If(adc_value >= adc_max,
+                        adc_max.eq(adc_value)
+                    ),
+                    # Compute Max.
+                    If(adc_value <= adc_min,
+                        adc_min.eq(adc_value)
+                    )
                 ),
-                # Compute Max.
-                If(adc_value <= adc_min,
-                    adc_min.eq(adc_value)
-                )
-            ),
-            # Clear Min/Max.
-            If(self._control.fields.stat_rst,
-                adc_min.eq(0xff),
-                adc_max.eq(0x00)
-            ),
-        ]
+                # Clear Min/Max.
+                If(self._control.fields.stat_rst,
+                    adc_min.eq(0xff),
+                    adc_max.eq(0x00)
+                ),
+            ]
 
         # Samples Count.
         adc_count = self._count.status
@@ -356,11 +359,12 @@ class HAD1511ADCDriver:
         self.set_reg(0x25, 0x0000) # Disable Patterns.
         self.set_reg(0x45, 0x0001) # Enable Deskew Pattern.
 
-    def get_range(self, duration=0.5):
+    def get_range(self, n, duration=0.5):
         self.control.write(HAD1511_CORE_CONTROL_STAT_RST)
         time.sleep(duration)
-        adc_min = (self.range.read() >> 0) & 0xff
-        adc_max = (self.range.read() >> 8) & 0xff
+        adc_range = self.range.read()
+        adc_min = (adc_range >> ((n%2)*16 + 0)) & 0xff
+        adc_max = (adc_range >> ((n%2)*16 + 8)) & 0xff
         return adc_min, adc_max
 
     def get_samplerate(self, duration=0.5):

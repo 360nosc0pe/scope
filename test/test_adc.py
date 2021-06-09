@@ -101,7 +101,7 @@ def adc_test(port,
     # ------------------------
 
     print("ADC Statistics...")
-    adc_min, adc_max = adc.get_range()
+    adc_min, adc_max = adc.get_range(n=adc_channels[0])
     adc_samplerate   = adc.get_samplerate()
     print(f"- Min: {adc_min}")
     print(f"- Max: {adc_max}")
