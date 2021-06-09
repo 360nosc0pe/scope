@@ -74,11 +74,11 @@ AFEVPerDivConfigs = {
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
 class FrontendDriver:
-    def __init__(self, bus, spi, adc, n):
-        self.bus  = bus
-        self.spi  = spi
-        self.adc  = adc
-        self.n    = n
+    def __init__(self, bus, spi, offsetdac, adc):
+        self.bus       = bus
+        self.spi       = spi
+        self.offsetdac = offsetdac
+        self.adc       = adc
         self.frontend_values = [FRONTEND_DEFAULT for i in range(4)]
 
     def set_frontend(self, n, data):
@@ -89,21 +89,21 @@ class FrontendDriver:
         assert 0 <= gain <= 255
         self.spi.write(SPI_CS_CH1_VGA + n, [gain])
 
-    def set_coupling(self, coupling):
+    def set_coupling(self, n, coupling):
         assert coupling in ["dc", "ac"]
-        frontend_value = self.frontend_values[self.n] & (~FRONTEND_DC_COUPLING)
+        frontend_value = self.frontend_values[n] & (~FRONTEND_DC_COUPLING)
         if coupling == "dc":
             frontend_value |= FRONTEND_DC_COUPLING
-        self.set_frontend(self.n, frontend_value)
+        self.set_frontend(n, frontend_value)
 
-    def set_bwl(self, bwl):
+    def set_bwl(self, n, bwl):
         assert bwl in ["full", "20mhz"]
-        frontend_value = self.frontend_values[self.n] & (~FRONTEND_FULL_BANDWIDTH)
+        frontend_value = self.frontend_values[n] & (~FRONTEND_FULL_BANDWIDTH)
         if bwl == "full":
             frontend_value |= FRONTEND_FULL_BANDWIDTH
-        self.set_frontend(self.n, frontend_value)
+        self.set_frontend(n, frontend_value)
 
-    def set_range(self, req_range):
+    def set_range(self, n, req_range):
         print(f"Requesting Range to {req_range:f}V...")
         req_range_div = req_range/AFEScreenDivs
         sel_range_div = 0
@@ -116,19 +116,19 @@ class FrontendDriver:
         print(f"Selecting {sel_range_div:f}V/Div AFE Config...")
         afe_resolution = (sel_range_div*AFEScreenDivs)/256
 
-        self.set_frontend(self.n, afe_config.frontend)
+        self.set_frontend(n, afe_config.frontend)
         self.adc.set_gain(afe_config.adc)
-        self.set_vga(self.n, afe_config.vga)
+        self.set_vga(n, afe_config.vga)
 
         return afe_resolution
 
-    def center(self, offsetdac, debug=True):
+    def center(self, n, debug=True):
         print(f"Centering ADC Data through OffsetDAC...")
         best_offset = 0
         best_error  = 0xff
         for offset in range(0x2500, 0x2700, 8):
-            offsetdac.set_ch(self.n, offset)
-            _min, _max = self.adc.get_range(n=self.n, duration=0.001)
+            self.offsetdac.set_ch(n, offset)
+            _min, _max = self.adc.get_range(n=n, duration=0.001)
             _mean = _min + (_max - _min)/2
             error = abs(_mean - 0xff/2)
             if error < best_error:
@@ -137,4 +137,4 @@ class FrontendDriver:
                 if debug:
                     print(f"OffsetDAC Best: 0x{offset:x} (ADC Min:{_min} Max: {_max} Mean: {_mean})")
         print(f"Best OffsetDAC 0x{best_offset:x}")
-        offsetdac.set_ch(self.n, best_offset)
+        self.offsetdac.set_ch(n, best_offset)

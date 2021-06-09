@@ -79,12 +79,12 @@ def adc_test(port,
 
 
     print("- Frontend Init...")
-    frontend = FrontendDriver(bus, spi, adc, n=adc_channels[0])
-    frontend.set_coupling(afe_coupling)
-    frontend.set_bwl(afe_bwl)
-    afe_resolution = frontend.set_range(afe_range)
+    frontend = FrontendDriver(bus, spi, offsetdac, adc)
+    frontend.set_coupling(adc_channels[0], afe_coupling)
+    frontend.set_bwl(adc_channels[0], afe_bwl)
+    afe_resolution = frontend.set_range(adc_channels[0], afe_range)
     if afe_center:
-        frontend.center(offsetdac)
+        frontend.center(adc_channels[0], offsetdac)
 
     # Trigger
     # -------
