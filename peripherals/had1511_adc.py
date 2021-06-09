@@ -325,20 +325,27 @@ class HAD1511ADCDriver:
         self.set_reg()
 
     def data_mode(self, n):
+        mode = "dual"
+        if isinstance(n, int):
+            n = [n, n]
+            mode = "single"
+        if isinstance(n, list) and (len(n) == 1):
+            n = n + n
+            mode = "single"
+        assert len(n) == 2
+        reg31 = {
+            "single": 0x0001, # Single Channel ADC0..3 Interleaving / X1 Divider.
+            "dual"  : 0x0102, # Dual Channel ADC0..1/ADC2..3 Interleaving / X2 Divider.
+        }[mode]
         self.set_reg(0x0f, 0x0200) # Power-Down.
-        self.set_reg(0x31, 0x0001) # Apply Mode. (Single Channel ADC1..4 Interleaving / X1 Divider).
+        self.set_reg(0x31,  reg31) # Apply Mode.
         self.set_reg(0x0f, 0x0000) # Power-Up.
 
         self.set_reg(0x25, 0x0000) # Disable Patterns.
 
         self.set_reg(0x30, 0x0008) # Clk Jitter Adjustement.
-        if isinstance(n, int):
-            inp_sel_adc01 = (1 << ((n%2)*3 + 1))
-            inp_sel_adc23 = (1 << ((n%2)*3 + 1))
-        elif isinstance(n, list):
-            assert len(n) == 2
-            inp_sel_adc01 = (1 << ((n[0]%2)*3 + 1))
-            inp_sel_adc23 = (1 << ((n[1]%2)*3 + 1))
+        inp_sel_adc01 = (1 << ((n[0]%2)*3 + 1))
+        inp_sel_adc23 = (1 << ((n[1]%2)*3 + 1))
         self.set_reg(0x3a, (inp_sel_adc01 << 8) | inp_sel_adc01) # Connect Input to ADC0/1.
         self.set_reg(0x3b, (inp_sel_adc23 << 8) | inp_sel_adc23) # Connect Input to ADC2/3.
         self.set_reg(0x33, 0x0001) # Coarse Gain in X mode.

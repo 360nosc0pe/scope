@@ -69,5 +69,11 @@ $ litex_server.py --udp --udp-ip 192.168.1.50
 Command used to capture a 115.2kbps UART:
 ```sh
 $ ./test_adc.py --adc-channels=0 --adc-samples=1000000 --adc-downsampling=256 --afe-range=5.0 --afe-center --plot --dump=dump.csv
+
 ```
+Command used to capture 12MHz clk on channel 0 and 6 MHz clk on channel 1:
+```sh
+./test_adc.py --adc-channels=01 --adc-samples=10000 --adc-downsampling=0 --afe-range=5.0 --afe-center --plot --dump=dump.csv
+```
+
 Use `./test_adc.py --help` to get more information about the command line parameters.

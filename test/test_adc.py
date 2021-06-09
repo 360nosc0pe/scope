@@ -42,6 +42,7 @@ def adc_test(port,
 
     for adc_channel in adc_channels:
         assert adc_channel in [0, 1, 2, 3]
+    assert len(adc_channels) <= 2
     bus = RemoteClient(port=port)
     bus.open()
 
@@ -63,7 +64,7 @@ def adc_test(port,
     adc = HAD1511ADCDriver(bus, spi, n=adc_channels[0]//2)
     adc.reset()
     adc.downsampling.write(adc_downsampling)
-    adc.data_mode(n=adc_channels[0])
+    adc.data_mode(n=adc_channels)
     if adc_mode == "ramp":
         adc.enable_ramp_pattern()
 
@@ -80,11 +81,12 @@ def adc_test(port,
 
     print("- Frontend Init...")
     frontend = FrontendDriver(bus, spi, offsetdac, adc)
-    frontend.set_coupling(adc_channels[0], afe_coupling)
-    frontend.set_bwl(adc_channels[0], afe_bwl)
-    afe_resolution = frontend.set_range(adc_channels[0], afe_range)
-    if afe_center:
-        frontend.center(adc_channels[0], offsetdac)
+    for n in adc_channels:
+        frontend.set_coupling(n, afe_coupling)
+        frontend.set_bwl(n, afe_bwl)
+        afe_resolution = frontend.set_range(n, afe_range)
+        if afe_center:
+            frontend.center(n, offsetdac)
 
     # Trigger
     # -------
@@ -99,35 +101,49 @@ def adc_test(port,
 
     # ADC Statistics / Capture
     # ------------------------
-
-    print("ADC Statistics...")
-    adc_min, adc_max = adc.get_range(n=adc_channels[0])
-    adc_samplerate   = adc.get_samplerate()
-    print(f"- Min: {adc_min}")
-    print(f"- Max: {adc_max}")
-    print(f"- Dynamic: {adc_max - adc_min}")
-    print(f"- Samplerate: ~{adc_samplerate/1e6}MSa/s ({adc_samplerate*8/1e9}Gb/s)")
+    for n in adc_channels:
+        print(f"ADC{n} Statistics...")
+        adc_min, adc_max = adc.get_range(n=n)
+        adc_samplerate   = adc.get_samplerate()/len(adc_channels)
+        print(f"- Min: {adc_min}")
+        print(f"- Max: {adc_max}")
+        print(f"- Dynamic: {adc_max - adc_min}")
+        print(f"- Samplerate: ~{adc_samplerate/1e6}MSa/s ({adc_samplerate*8/1e9}Gb/s)")
 
     print("ADC Data Capture (to DRAM)...")
-    adc_dma.start(base=0x0000_0000, length=adc_samples)
+    adc_dma.start(base=0x0000_0000, length=len(adc_channels)*adc_samples)
     trigger.enable()
     adc_dma.wait()
 
     print("ADC Data Retrieve (from DRAM)...")
     dma_upload = DMAUploadDriver(bus)
-    adc_data   = dma_upload.run(base=0x0000_0000, length=adc_samples)
-    if len(adc_data) > adc_samples:
-        adc_data = adc_data[:adc_samples]
+    adc_dump   = dma_upload.run(base=0x0000_0000, length=adc_samples)
+    if len(adc_dump) > len(adc_channels)*adc_samples:
+        adc_dump = adc_dump[:len(adc_channels)*adc_samples]
+    adc_data = []
+    for n in adc_channels:
+        offset = 4*n
+        adc_data_n = []
+        while (offset+4) <= len(adc_dump):
+            adc_data_n += adc_dump[offset:offset+4]
+            offset += 8
+        adc_data.append(adc_data_n)
 
     # Dump
     # ----
 
     if dump != "":
-        # Note: Requires export LC_NUMERIC=en_US.utf-8 with GLScopeClient.
+        # Note: Requires  with GLScopeClient.
         f = open(dump, "w")
-        f.write("Time, ADC\n")
-        for n, d in enumerate(adc_data):
-            line = f"{n/adc_samplerate:1.15f}, {d*afe_resolution:f}\n"
+        f.write("Time")
+        for n in adc_channels:
+            f.write(f", ADC{n:d}")
+        f.write("\n")
+        for i in range(len(adc_data[0])):
+            line = f"{i/adc_samplerate:1.15f}"
+            for n in range(len(adc_channels)):
+                line += f" ,{adc_data[n][i]*afe_resolution:f}"
+            line += "\n"
             f.write(line)
         f.close()
 
@@ -136,7 +152,8 @@ def adc_test(port,
 
     if plot:
         print("Plot...")
-        plt.plot(adc_data)
+        for n in range(len(adc_channels)):
+            plt.plot(adc_data[n])
         plt.show()
 
     bus.close()
