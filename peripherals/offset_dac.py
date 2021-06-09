@@ -24,11 +24,11 @@ from litex.soc.cores.spi import SPIMaster
 #            │         │SPI│        │ V │       ├──► Y2  (Unused)
 #            └──┬─────┬┘   └────────┘   │   M   ├──► Y3  (Unused)
 #               │     │                 │   U   │
-#               │     └────────────────►│S  X   ├──► Y4  Reference offset for CH1's VGA.
-#               │                       │       ├──► Y5  Reference offset for CH2's VGA.
+#               │     └────────────────►│S  X   ├──► Y4  Reference offset for CH0's VGA.
+#               │                       │       ├──► Y5  Reference offset for CH1's VGA.
 #               └──────────────────────►│/E     │
-#                                       │       ├──► Y6  Reference offset for CH3's VGA.
-#                                       │       ├──► Y7  Reference offset for CH4's VGA.
+#                                       │       ├──► Y6  Reference offset for CH2's VGA.
+#                                       │       ├──► Y7  Reference offset for CH3's VGA.
 #                                       └───────┘
 #
 # Global
@@ -103,10 +103,10 @@ class OffsetDAC(Module, AutoCSR):
         self._status  = CSRStatus() # Unused
 
         # Channel Offsets.
+        self._ch0 = CSRStorage(16, reset=0x8000)
         self._ch1 = CSRStorage(16, reset=0x8000)
         self._ch2 = CSRStorage(16, reset=0x8000)
         self._ch3 = CSRStorage(16, reset=0x8000)
-        self._ch4 = CSRStorage(16, reset=0x8000)
 
         # # #
 
@@ -138,10 +138,10 @@ class OffsetDAC(Module, AutoCSR):
             )
         )
         self.comb += Case(channel, {
-            0 : offset.eq(self._ch1.storage),
-            1 : offset.eq(self._ch2.storage),
-            2 : offset.eq(self._ch3.storage),
-            3 : offset.eq(self._ch4.storage),
+            0 : offset.eq(self._ch0.storage),
+            1 : offset.eq(self._ch1.storage),
+            2 : offset.eq(self._ch2.storage),
+            3 : offset.eq(self._ch3.storage),
         })
         fsm.act("DAC-UPDATE",
             NextValue(run, 1),
@@ -199,4 +199,4 @@ class OffsetDACDriver:
         self.bus.regs.offset_dac_control.write(1)
 
     def set_ch(self, n, value):
-        getattr(self.bus.regs, f"offset_dac_ch{n+1}").write(value)
+        getattr(self.bus.regs, f"offset_dac_ch{n}").write(value)
