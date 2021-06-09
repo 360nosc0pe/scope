@@ -40,9 +40,12 @@ def adc_test(port,
     # Plot Parmeters.
     plot=False):
 
-    for adc_channel in adc_channels:
-        assert adc_channel in [0, 1, 2, 3]
-    assert len(adc_channels) <= 2
+    adc_channels_configs = [
+        [0], [1], [2], [3], # 1 Channel.
+        [0,   1], [2,   3], # 2 Channels.
+        #[0,   1,   2,   3], # 4 Channels.
+    ]
+    assert adc_channels in adc_channels_configs
     bus = RemoteClient(port=port)
     bus.open()
 
