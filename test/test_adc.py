@@ -60,10 +60,10 @@ def adc_test(port,
     # ----------------
 
     print("HAD1511 ADC Init...")
-    adc = HAD1511ADCDriver(bus, spi, n=adc_channels[0])
+    adc = HAD1511ADCDriver(bus, spi, n=adc_channels[0]//2)
     adc.reset()
     adc.downsampling.write(adc_downsampling)
-    adc.data_mode()
+    adc.data_mode(n=adc_channels[0])
     if adc_mode == "ramp":
         adc.enable_ramp_pattern()
 

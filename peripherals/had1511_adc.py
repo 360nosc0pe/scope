@@ -293,10 +293,10 @@ class HAD1511ADCDriver:
         self.n       = n
         self.mode    = mode
 
-        self.control      = getattr(bus.regs, f"adc{n//2}_control")
-        self.downsampling = getattr(bus.regs, f"adc{n//2}_downsampling")
-        self.range        = getattr(bus.regs, f"adc{n//2}_range")
-        self.count        = getattr(bus.regs, f"adc{n//2}_count")
+        self.control      = getattr(bus.regs, f"adc{n}_control")
+        self.downsampling = getattr(bus.regs, f"adc{n}_downsampling")
+        self.range        = getattr(bus.regs, f"adc{n}_range")
+        self.count        = getattr(bus.regs, f"adc{n}_count")
 
     def reset(self):
         # Reset ADC.
@@ -310,7 +310,7 @@ class HAD1511ADCDriver:
         self.control.write(HAD1511_CORE_CONTROL_FRAME_RST)
 
     def set_reg(self, reg, value):
-        self.spi.write(SPI_CS_ADC0 + self.n//2, [reg, (value >> 8) & 0xff, value & 0xff])
+        self.spi.write(SPI_CS_ADC0 + self.n, [reg, (value >> 8) & 0xff, value & 0xff])
 
     def set_gain(self, gain):
         if self.mode == "single":
@@ -321,7 +321,7 @@ class HAD1511ADCDriver:
     def set_clk_divider(self, divider=1):
         self.set_reg()
 
-    def data_mode(self):
+    def data_mode(self, n):
         self.set_reg(0x0f, 0x0200) # Power-Down.
         self.set_reg(0x31, 0x0001) # Apply Mode. (Single Channel ADC1..4 Interleaving / X1 Divider).
         self.set_reg(0x0f, 0x0000) # Power-Up.
@@ -329,7 +329,7 @@ class HAD1511ADCDriver:
         self.set_reg(0x25, 0x0000) # Disable Patterns.
 
         self.set_reg(0x30, 0x0008) # Clk Jitter Adjustement.
-        inp_sel_adcx = (1 << ((self.n%2)*3 + 1))
+        inp_sel_adcx = (1 << ((n%2)*3 + 1))
         self.set_reg(0x3a, (inp_sel_adcx << 8) | inp_sel_adcx) # Connect Input to ADC1/2.
         self.set_reg(0x3b, (inp_sel_adcx << 8) | inp_sel_adcx) # Connect Input to ADC3/4.
         self.set_reg(0x33, 0x0001) # Coarse Gain in X mode.
