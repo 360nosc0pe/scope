@@ -374,10 +374,10 @@ class HAD1511DMADriver:
         self.bus     = bus
         self.n       = n
 
-        self.dma_enable = getattr(bus.regs, f"adc{n//2}_dma_enable")
-        self.dma_base   = getattr(bus.regs, f"adc{n//2}_dma_base")
-        self.dma_length = getattr(bus.regs, f"adc{n//2}_dma_length")
-        self.dma_done   = getattr(bus.regs, f"adc{n//2}_dma_done")
+        self.dma_enable = getattr(bus.regs, f"adc{n}_dma_enable")
+        self.dma_base   = getattr(bus.regs, f"adc{n}_dma_base")
+        self.dma_length = getattr(bus.regs, f"adc{n}_dma_length")
+        self.dma_done   = getattr(bus.regs, f"adc{n}_dma_done")
 
     def reset(self):
         self.dma_enable.write(0)

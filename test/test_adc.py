@@ -94,7 +94,7 @@ def adc_test(port,
 
     # HAD1511 DMA Init
     # ----------------
-    adc_dma = HAD1511DMADriver(bus, n=adc_channels[0])
+    adc_dma = HAD1511DMADriver(bus, n=adc_channels[0]//2)
     adc_dma.reset()
 
     # ADC Statistics / Capture
