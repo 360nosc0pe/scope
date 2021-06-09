@@ -40,7 +40,7 @@ def adc_test(port,
     # Plot Parmeters.
     plot=False):
 
-    assert adc_channel in [1, 2, 3, 4]
+    assert adc_channel in [0, 1, 2, 3]
     bus = RemoteClient(port=port)
     bus.open()
 
@@ -59,7 +59,7 @@ def adc_test(port,
     # ----------------
 
     print("HAD1511 ADC Init...")
-    adc = HAD1511ADCDriver(bus, spi, n=adc_channel-1)
+    adc = HAD1511ADCDriver(bus, spi, n=adc_channel)
     adc.reset()
     adc.downsampling.write(adc_downsampling)
     adc.data_mode()
@@ -93,7 +93,7 @@ def adc_test(port,
 
     # HAD1511 DMA Init
     # ----------------
-    adc_dma = HAD1511DMADriver(bus, n=adc_channel-1)
+    adc_dma = HAD1511DMADriver(bus, n=adc_channel)
     adc_dma.reset()
 
     # ADC Statistics / Capture
@@ -146,7 +146,7 @@ def main():
     parser = argparse.ArgumentParser(description="ADC test utility.")
     parser.add_argument("--port",              default="1234",           help="Host bind port.")
     # ADC Parameters.
-    parser.add_argument("--adc-channel",      default=1,         type=int, help="ADC Channel: 1 (default), 2, 3, or 4.")
+    parser.add_argument("--adc-channel",      default=0,         type=int, help="ADC Channel: 0 (default), 1, 2 or 3.")
     parser.add_argument("--adc-samples",      default=1000,      type=int, help="ADC Capture Samples (default=1000).")
     parser.add_argument("--adc-downsampling", default=1,         type=int, help="ADC DownSampling Ratio (default=1).")
     parser.add_argument("--adc-mode",         default="capture",           help="ADC Mode: capture (default), ramp.")
