@@ -32,7 +32,7 @@ from peripherals.dma_upload import *
 
 def adc_test(port,
     # ADC Parameters.
-    adc_channel, adc_samples, adc_downsampling, adc_mode,
+    adc_channels, adc_samples, adc_downsampling, adc_mode,
     # AFE Parameters.
     afe_range, afe_coupling, afe_bwl, afe_center,
     # Dump Parameters.
@@ -40,7 +40,8 @@ def adc_test(port,
     # Plot Parmeters.
     plot=False):
 
-    assert adc_channel in [0, 1, 2, 3]
+    for adc_channel in adc_channels:
+        assert adc_channel in [0, 1, 2, 3]
     bus = RemoteClient(port=port)
     bus.open()
 
@@ -59,7 +60,7 @@ def adc_test(port,
     # ----------------
 
     print("HAD1511 ADC Init...")
-    adc = HAD1511ADCDriver(bus, spi, n=adc_channel)
+    adc = HAD1511ADCDriver(bus, spi, n=adc_channels[0])
     adc.reset()
     adc.downsampling.write(adc_downsampling)
     adc.data_mode()
@@ -93,7 +94,7 @@ def adc_test(port,
 
     # HAD1511 DMA Init
     # ----------------
-    adc_dma = HAD1511DMADriver(bus, n=adc_channel)
+    adc_dma = HAD1511DMADriver(bus, n=adc_channels[0])
     adc_dma.reset()
 
     # ADC Statistics / Capture
@@ -146,7 +147,7 @@ def main():
     parser = argparse.ArgumentParser(description="ADC test utility.")
     parser.add_argument("--port",              default="1234",           help="Host bind port.")
     # ADC Parameters.
-    parser.add_argument("--adc-channel",      default=0,         type=int, help="ADC Channel: 0 (default), 1, 2 or 3.")
+    parser.add_argument("--adc-channels",     default="0",       type=str, help="ADC Channels: 0 (default), 1, 2, 3 or combinations (01, 23).")
     parser.add_argument("--adc-samples",      default=1000,      type=int, help="ADC Capture Samples (default=1000).")
     parser.add_argument("--adc-downsampling", default=1,         type=int, help="ADC DownSampling Ratio (default=1).")
     parser.add_argument("--adc-mode",         default="capture",           help="ADC Mode: capture (default), ramp.")
@@ -169,7 +170,7 @@ def main():
 
     adc_test(port=port,
         # ADC.
-        adc_channel      = args.adc_channel,
+        adc_channels     = [int(c, 0) for c in args.adc_channels],
         adc_samples      = args.adc_samples,
         adc_downsampling = args.adc_downsampling,
         adc_mode         = args.adc_mode,
