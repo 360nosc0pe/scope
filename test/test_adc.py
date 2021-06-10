@@ -136,7 +136,6 @@ def adc_test(port,
     # ----
 
     if dump != "":
-        # Note: Requires  with GLScopeClient.
         f = open(dump, "w")
         f.write("Time")
         for n in adc_channels:

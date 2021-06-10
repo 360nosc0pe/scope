@@ -77,3 +77,5 @@ Command used to capture 12MHz clk on channel 0 and 6 MHz clk on channel 1:
 ```
 
 Use `./test_adc.py --help` to get more information about the command line parameters.
+
+> Note: Requires `export LC_NUMERIC=en_US.utf-8` with GLScopeClient.
