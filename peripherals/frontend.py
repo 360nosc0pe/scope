@@ -74,11 +74,11 @@ AFEVPerDivConfigs = {
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
 class FrontendDriver:
-    def __init__(self, bus, spi, offsetdac, adc):
+    def __init__(self, bus, spi, offsetdac, adcs):
         self.bus       = bus
         self.spi       = spi
         self.offsetdac = offsetdac
-        self.adc       = adc
+        self.adcs      = adcs
         self.frontend_values = [FRONTEND_DEFAULT for i in range(4)]
 
     def set_frontend(self, n, data):
@@ -117,7 +117,7 @@ class FrontendDriver:
         afe_resolution = (sel_range_div*AFEScreenDivs)/256
 
         self.set_frontend(n, afe_config.frontend)
-        self.adc.set_gain(afe_config.adc)
+        self.adcs[n//2].set_gain(afe_config.adc)
         self.set_vga(n, afe_config.vga)
 
         return afe_resolution
@@ -128,7 +128,7 @@ class FrontendDriver:
         best_error  = 0xff
         for offset in range(0x2500, 0x2700, 8):
             self.offsetdac.set_ch(n, offset)
-            _min, _max = self.adc.get_range(n=n, duration=0.001)
+            _min, _max = self.adcs[n//2].get_range(n=n, duration=0.001)
             _mean = _min + (_max - _min)/2
             error = abs(_mean - 0xff/2)
             if error < best_error:

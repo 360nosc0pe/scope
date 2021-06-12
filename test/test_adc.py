@@ -43,7 +43,7 @@ def adc_test(port,
     adc_channels_configs = [
         [0], [1], [2], [3], # 1 Channel.
         [0,   1], [2,   3], # 2 Channels.
-        #[0,   1,   2,   3], # 4 Channels.
+        [0,   1,   2,   3], # 4 Channels.
     ]
     assert adc_channels in adc_channels_configs
     bus = RemoteClient(port=port)
@@ -63,13 +63,17 @@ def adc_test(port,
     # HAD1511 ADC Init
     # ----------------
 
-    print("HAD1511 ADC Init...")
-    adc = HAD1511ADCDriver(bus, spi, n=adc_channels[0]//2)
-    adc.reset()
-    adc.downsampling.write(adc_downsampling)
-    adc.data_mode(n=adc_channels)
-    if adc_mode == "ramp":
-        adc.enable_ramp_pattern()
+    print("HAD1511 ADCs Init...")
+    adcs = {}
+    for n in adc_channels:
+        if n%2 == 0:
+            adc = HAD1511ADCDriver(bus, spi, n=n//2)
+            adc.reset()
+            adc.downsampling.write(adc_downsampling)
+            adc.data_mode(n={1: [n], 2: [0, 1], 4: [0, 1]}[len(adc_channels)])
+            if adc_mode == "ramp":
+                adc.enable_ramp_pattern()
+            adcs[n//2] = adc
 
     # Analog Front-End (AFE) Init...
     # ------------------------------
@@ -83,7 +87,7 @@ def adc_test(port,
 
 
     print("- Frontend Init...")
-    frontend = FrontendDriver(bus, spi, offsetdac, adc)
+    frontend = FrontendDriver(bus, spi, offsetdac, adcs)
     for n in adc_channels:
         frontend.set_coupling(n, afe_coupling)
         frontend.set_bwl(n, afe_bwl)
@@ -97,40 +101,51 @@ def adc_test(port,
     trigger = TriggerDriver(bus)
     trigger.reset()
 
-    # HAD1511 DMA Init
-    # ----------------
-    adc_dma = HAD1511DMADriver(bus, n=adc_channels[0]//2)
-    adc_dma.reset()
+    # HAD1511 DMAs Init
+    # -----------------
+    adc_dmas = {}
+    for n in adc_channels:
+        if n%2 == 0:
+            adc_dma = HAD1511DMADriver(bus, n=n//2)
+            adc_dma.reset()
+        adc_dmas[n//2] = adc_dma
 
     # ADC Statistics / Capture
     # ------------------------
     for n in adc_channels:
         print(f"ADC{n} Statistics...")
-        adc_min, adc_max = adc.get_range(n=n)
-        adc_samplerate   = adc.get_samplerate()/len(adc_channels)
+        adc_min, adc_max = adcs[n//2].get_range(n=n%2)
+        adc_samplerate   = adcs[n//2].get_samplerate()/len(adc_channels)
         print(f"- Min: {adc_min}")
         print(f"- Max: {adc_max}")
         print(f"- Dynamic: {adc_max - adc_min}")
         print(f"- Samplerate: ~{adc_samplerate/1e6}MSa/s ({adc_samplerate*8/1e9}Gb/s)")
 
     print("ADC Data Capture (to DRAM)...")
-    adc_dma.start(base=0x0000_0000, length=len(adc_channels)*adc_samples)
+    adc_dma_bases = {
+        0: 0x0000_0000,
+        1: 0x0400_0000,
+    }
+    for n, adc_dma in adc_dmas.items():
+        adc_dma.start(base=adc_dma_bases[n], length=len(adc_channels)*adc_samples)
     trigger.enable()
-    adc_dma.wait()
+    for n, adc_dma in adc_dmas.items():
+        adc_dma.wait()
 
     print("ADC Data Retrieve (from DRAM)...")
     dma_upload = DMAUploadDriver(bus)
-    adc_dump   = dma_upload.run(base=0x0000_0000, length=adc_samples)
-    if len(adc_dump) > len(adc_channels)*adc_samples:
-        adc_dump = adc_dump[:len(adc_channels)*adc_samples]
     adc_data = []
-    for n in adc_channels:
-        offset = 4*n
-        adc_data_n = []
-        while (offset+4) <= len(adc_dump):
-            adc_data_n += adc_dump[offset:offset+4]
-            offset += 8
-        adc_data.append(adc_data_n)
+    for n in adc_dmas.keys():
+        adc_dump = dma_upload.run(base=adc_dma_bases[n], length=adc_samples)
+        if len(adc_dump) > min(len(adc_channels), 2)*adc_samples:
+            adc_dump = adc_dump[:min(len(adc_channels), 2)*adc_samples]
+        for m in range(min(len(adc_channels), 2)):
+            offset = 4*m
+            adc_data_m = []
+            while (offset+4) <= len(adc_dump):
+                adc_data_m += adc_dump[offset:offset+4]
+                offset += 8
+            adc_data.append(adc_data_m)
 
     # Dump
     # ----
