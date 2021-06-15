@@ -29,7 +29,7 @@ from litedram.frontend.dma import LiteDRAMDMAWriter
 
 from liteeth.phy.mii import LiteEthPHYMII
 
-from peripherals.frontpanel import FrontpanelLeds, FrontpanelButtons
+from peripherals.frontpanel import FrontpanelLeds, FrontpanelButtons, FP_BTNS
 from peripherals.offset_dac import OffsetDAC
 from peripherals.had1511_adc import HAD1511ADC
 from peripherals.trigger import Trigger
@@ -171,8 +171,15 @@ class ScopeSoC(SoCCore):
             "v_sync_width"  : 1,
         })
         self.submodules.lcdphy = VideoVGAPHY(platform.request("lcd"), clock_domain="lcd")
-        #self.add_video_colorbars(phy=self.lcdphy, timings=video_timings, clock_domain="lcd")
-        self.add_video_terminal(phy=self.lcdphy, timings=video_timings, clock_domain="lcd")
+        self.submodules.lcdphy_mux = stream.Multiplexer(self.lcdphy.sink.description, n=2)
+        self.add_video_framebuffer(phy=self.lcdphy_mux.sink0, timings=video_timings, clock_domain="lcd")
+        self.add_video_terminal(   phy=self.lcdphy_mux.sink1, timings=video_timings, clock_domain="lcd")
+        self.comb += self.lcdphy_mux.source.connect(self.lcdphy.sink)
+        menu_on_off   = Signal()
+        menu_on_off_d = Signal()
+        self.sync += menu_on_off.eq((self.fpbtns.value.status & FP_BTNS.MENU_ON_OFF.value) != 0)
+        self.sync += menu_on_off_d.eq(menu_on_off)
+        self.sync += If(menu_on_off & ~menu_on_off_d, self.lcdphy_mux.sel.eq(~self.lcdphy_mux.sel))
 
         # Scope ------------------------------------------------------------------------------------
         #
