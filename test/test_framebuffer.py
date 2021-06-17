@@ -26,9 +26,12 @@ def framebuffer_test(port):
     pixels = image.load()
 
     for y in range(480):
-        for x in range(800):
-            r, g, b = pixels[x, y]
-            bus.write(0x40c00000 + (y*800 + x)*4, (r << 16) | (g << 8) | (b << 0))
+        for x in range(0, 800, 8):
+            data = []
+            for i in range(8):
+                r, g, b = pixels[x + i, y]
+                data.append((r << 16) | (g << 8) | (b << 0))
+            bus.write(0x40c00000 + (y*800 + x)*4, data)
 
     bus.close()
 
@@ -36,7 +39,7 @@ def framebuffer_test(port):
 
 def main():
     parser = argparse.ArgumentParser(description="Framebuffer test utility")
-    parser.add_argument("--port",        default="1234",           help="Host bind port")
+    parser.add_argument("--port", default="1234", help="Host bind port")
     args = parser.parse_args()
 
     port = int(args.port, 0)
