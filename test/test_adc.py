@@ -23,6 +23,7 @@ from peripherals.spi import *
 from peripherals.spi         import *
 from peripherals.offset_dac  import *
 from peripherals.frontend    import *
+from peripherals.frontpanel  import *
 from peripherals.trigger     import *
 from peripherals.adf4360_pll import *
 from peripherals.had1511_adc import *
@@ -52,6 +53,15 @@ def adc_test(port,
     # SPI (Common)
     # ------------
     spi = SPIDriver(bus)
+
+    # Leds
+    # ----
+    leds = 0
+    for n in adc_channels:
+        leds |= FP_LEDS[f"CHANNEL_{n+1:d}"].value
+    leds |= FP_LEDS["TRIGGER_AUTO"]
+    leds |= FP_LEDS["RUN_STOP_GREEN"]
+    bus.regs.fpleds_value.write(leds)
 
     # ADF4360 PLL Init
     # ----------------
