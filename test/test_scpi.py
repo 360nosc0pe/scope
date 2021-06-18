@@ -19,9 +19,10 @@ import threading
 # SCPI Server --------------------------------------------------------------------------------------
 
 class SCPIServer:
-    def __init__(self, bind_ip="localhost", control_port=5025, waveform_port=50101):
+    def __init__(self, bind_ip="localhost", control_port=5025, control_only=False, waveform_port=50101):
         self.bind_ip       = bind_ip
         self.control_port  = control_port
+        self.control_only  = control_only
         self.waveform_port = waveform_port
 
     def open(self):
@@ -30,16 +31,18 @@ class SCPIServer:
         self.control_sock.bind((self.bind_ip, self.control_port))
         self.control_sock.listen(1)
 
-        self.waveform_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.waveform_sock.bind((self.bind_ip, self.waveform_port))
-        self.waveform_sock.listen(1)
+        if not self.control_only:
+            self.waveform_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.waveform_sock.bind((self.bind_ip, self.waveform_port))
+            self.waveform_sock.listen(1)
 
     def close(self):
         print("Closing Server...")
         self.control_sock.close()
-        self.waveform_sock.close()
         del self.control_sock
-        del self.waveform_sock
+        if not self.control_only:
+            self.waveform_sock.close()
+            del self.waveform_sock
 
     def _control_thread(self):
         while True:
@@ -75,20 +78,27 @@ class SCPIServer:
         self.control_thread.setDaemon(True)
         self.control_thread.start()
 
-        self.waveform_thread = threading.Thread(target=self._waveform_thread)
-        self.waveform_thread.setDaemon(True)
-        self.waveform_thread.start()
+        if not self.control_only:
+            self.waveform_thread = threading.Thread(target=self._waveform_thread)
+            self.waveform_thread.setDaemon(True)
+            self.waveform_thread.start()
 
 # Run ----------------------------------------------------------------------------------------------
 
 def main():
     parser = argparse.ArgumentParser(description="SCPI Server test.")
-    parser.add_argument("--bind-ip",      default="localhost", help="Host bind address.")
-    parser.add_argument("--control-port",  default=5025,       help="Host bind Control port.")
-    parser.add_argument("--waveform-port", default=50101,      help="Host bind Waveform port.")
+    parser.add_argument("--bind-ip",       default="localhost", help="Host bind address.")
+    parser.add_argument("--control-port",  default=5025,        help="Host bind Control port.")
+    parser.add_argument("--control-only",  action="store_true", help="Only enable Control port.")
+    parser.add_argument("--waveform-port", default=50101,       help="Host bind Waveform port.")
     args = parser.parse_args()
 
-    server = SCPIServer(args.bind_ip, int(args.control_port), int(args.waveform_port))
+    server = SCPIServer(
+        bind_ip       = args.bind_ip,
+        control_port  = int(args.control_port),
+        control_only  = args.control_only,
+        waveform_port = int(args.waveform_port)
+    )
     server.open()
     server.start()
     try:

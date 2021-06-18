@@ -12,6 +12,7 @@
 import time
 import sys
 import argparse
+import socket
 
 import matplotlib.pyplot as plt
 
@@ -38,8 +39,11 @@ def adc_test(port,
     afe_range, afe_coupling, afe_bwl, afe_center,
     # Dump Parameters.
     dump="",
-    # Plot Parmeters.
-    plot=False):
+    # Plot Parameters.
+    plot=False,
+    # GLScopeClient Parameters
+    glscopeclient=False, glscopeclient_trigger=200,
+    ):
 
     adc_channels_configs = [
         [0], [1], [2], [3], # 1 Channel.
@@ -131,31 +135,58 @@ def adc_test(port,
         print(f"- Dynamic: {adc_max - adc_min}")
         print(f"- Samplerate: ~{adc_samplerate/1e6}MSa/s ({adc_samplerate*8/1e9}Gb/s)")
 
-    print("ADC Data Capture (to DRAM)...")
-    adc_dma_bases = {
-        0: 0x0000_0000,
-        1: 0x0400_0000,
-    }
-    for n, adc_dma in adc_dmas.items():
-        adc_dma.start(base=adc_dma_bases[n], length=len(adc_channels)*adc_samples)
-    trigger.enable()
-    for n, adc_dma in adc_dmas.items():
-        adc_dma.wait()
 
-    print("ADC Data Retrieve (from DRAM)...")
-    dma_upload = DMAUploadDriver(bus)
-    adc_data = []
-    for n in adc_dmas.keys():
-        adc_dump = dma_upload.run(base=adc_dma_bases[n], length=adc_samples)
-        if len(adc_dump) > min(len(adc_channels), 2)*adc_samples:
-            adc_dump = adc_dump[:min(len(adc_channels), 2)*adc_samples]
-        for m in range(min(len(adc_channels), 2)):
-            offset = 4*m
-            adc_data_m = []
-            while (offset+4) <= len(adc_dump):
-                adc_data_m += adc_dump[offset:offset+4]
-                offset += 8
-            adc_data.append(adc_data_m)
+    # ADC Capture/DMA.
+
+    if glscopeclient:
+        waveform_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        waveform_sock.bind(("localhost", 50101))
+        waveform_sock.listen(1)
+
+        print("Waiting GLScopeClient connection...")
+        waveform_client, _ = waveform_sock.accept()
+
+    while True:
+        if not glscopeclient:
+            print("ADC Data Capture (to DRAM)...")
+        adc_dma_bases = {
+            0: 0x0000_0000,
+            1: 0x0400_0000,
+        }
+        for n, adc_dma in adc_dmas.items():
+            adc_dma.start(base=adc_dma_bases[n], length=2*len(adc_channels)*adc_samples) # FIXME X2 (For glscopeclient_trigger)
+        trigger.enable()
+        for n, adc_dma in adc_dmas.items():
+            adc_dma.wait()
+
+        if not glscopeclient:
+            print("ADC Data Retrieve (from DRAM)...")
+        dma_upload = DMAUploadDriver(bus)
+        adc_data = []
+        for n in adc_dmas.keys():
+            adc_dump = dma_upload.run(base=adc_dma_bases[n], length=2*adc_samples) # FIXME X2 (For glscopeclient_trigger)
+            if glscopeclient:
+                for i in range(adc_samples):
+                    if (adc_dump[i] < glscopeclient_trigger) and (adc_dump[i+1] > glscopeclient_trigger):
+                        adc_dump = adc_dump[i:]
+                        break
+            if len(adc_dump) > min(len(adc_channels), 2)*adc_samples:
+                adc_dump = adc_dump[:min(len(adc_channels), 2)*adc_samples]
+            for m in range(min(len(adc_channels), 2)):
+                offset = 4*m
+                adc_data_m = []
+                while (offset+4) <= len(adc_dump):
+                    adc_data_m += adc_dump[offset:offset+4]
+                    offset += 8
+                adc_data.append(adc_data_m)
+
+        if glscopeclient:
+            waveform_client.send(bytes(adc_data[0]))
+        else:
+            break
+
+    if glscopeclient:
+        waveform_sock.close()
 
     # Dump
     # ----
@@ -208,6 +239,10 @@ def main():
     # Plot Parameters.
     parser.add_argument("--plot", action="store_true", help="Plot captured data.")
 
+    # GLScopeClient Parameters.
+    parser.add_argument("--glscopeclient", action="store_true", help="GLScopeClient mode.")
+
+
     args = parser.parse_args()
 
     port = int(args.port, 0)
@@ -226,7 +261,9 @@ def main():
         # Dump.
         dump             = args.dump,
         # Plot.
-        plot             = args.plot
+        plot             = args.plot,
+        # GLScopeCLient
+        glscopeclient    = args.glscopeclient
     )
 
 if __name__ == "__main__":

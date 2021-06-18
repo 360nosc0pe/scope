@@ -76,6 +76,14 @@ Command used to capture 12MHz clk on channel 0 and 6 MHz clk on channel 1:
 ./test_adc.py --adc-channels=01 --adc-samples=10000 --adc-downsampling=0 --afe-range=5.0 --afe-center --plot --dump=dump.csv
 ```
 
+Command used to capture 12MHz clk on channel 0 and push waveforms to GLScopeClient:
+```sh
+./test_scpi.py --control-only
+./test_adc.py --adc-channels=0 --adc-samples=16384 --adc-downsampling=0 --afe-range=5.0 --afe-center --glscopeclient
+./glscopeclient --debug myscope:aklabs:lan:127.0.0.1
+```
+
+
 Use `./test_adc.py --help` to get more information about the command line parameters.
 
 > Note: Requires `export LC_NUMERIC=en_US.utf-8` with GLScopeClient.
