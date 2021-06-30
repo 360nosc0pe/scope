@@ -37,12 +37,14 @@ def adc_test(port,
     adc_channels, adc_samples, adc_downsampling, adc_mode,
     # AFE Parameters.
     afe_range, afe_coupling, afe_bwl, afe_center,
+    # Trigger Parameters.
+    trig_offset,
     # Dump Parameters.
     dump="",
     # Plot Parameters.
     plot=False,
     # GLScopeClient Parameters
-    glscopeclient=False, glscopeclient_trigger=200,
+    glscopeclient=False,
     ):
 
     adc_channels_configs = [
@@ -167,7 +169,7 @@ def adc_test(port,
             adc_dump = dma_upload.run(base=adc_dma_bases[n], length=2*adc_samples) # FIXME X2 (For glscopeclient_trigger)
             if glscopeclient:
                 for i in range(adc_samples):
-                    if (adc_dump[i] < glscopeclient_trigger) and (adc_dump[i+1] > glscopeclient_trigger):
+                    if (adc_dump[i] < trig_offset) and (adc_dump[i+1] > trig_offset):
                         adc_dump = adc_dump[i:]
                         break
             if len(adc_dump) > min(len(adc_channels), 2)*adc_samples:
@@ -233,6 +235,9 @@ def main():
     parser.add_argument("--afe-bwl",        default="full",                  help="Analog Front-End Bandwidth Limitation: full (default) or 20mhz")
     parser.add_argument("--afe-center",     action="store_true",             help="Center Signal with Offset DAC.")
 
+    # Trigger Parameters.
+    parser.add_argument("--trig-offset",    default=0,                       help="Trigger Offset (0-255).")
+
     # Dump Parameters.
     parser.add_argument("--dump", default="", help="Dump captured data to specified CSV file.")
 
@@ -258,6 +263,8 @@ def main():
         afe_coupling     = args.afe_coupling,
         afe_bwl          = args.afe_bwl,
         afe_center       = args.afe_center,
+        # Trigger.
+        trig_offset      = int(args.trig_offset, 0),
         # Dump.
         dump             = args.dump,
         # Plot.
