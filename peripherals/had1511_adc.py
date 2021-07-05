@@ -59,9 +59,12 @@ had1511_phy_layout = ["fclk_p", "fclk_n", "lclk_p", "lclk_n", "d_p", "d_n"]
 class HAD1511ADC(Module, AutoCSR):
     def __init__(self, pads, sys_clk_freq, polarity=0, clock_domain="sys"):
         # Parameters.
-        nchannels = len(pads.d_p)
-        for name in had1511_phy_layout:
-            assert hasattr(pads, name)
+        if pads is not None:
+            nchannels = len(pads.d_p)
+            for name in had1511_phy_layout:
+                assert hasattr(pads, name)
+        else:
+            nchannels = 8
 
         # ADC stream.
         self.source = source = stream.Endpoint([("data", nchannels*8)])
@@ -85,106 +88,45 @@ class HAD1511ADC(Module, AutoCSR):
 
         # # #
 
+
         # Clocking.
         # ---------
 
-        self.clock_domains.cd_adc       = ClockDomain() # ADC Bitclock.
-        self.clock_domains.cd_adc_frame = ClockDomain() # ADC Frameclock (freq : ADC Bitclock/8).
-        adc_clk = Signal()
-        self.specials += Instance("IBUFDS",
-            i_I  = pads.lclk_p,
-            i_IB = pads.lclk_n,
-            o_O  = adc_clk
-        )
-        self.specials += Instance("BUFIO",
-            i_I = adc_clk,
-            o_O = ClockSignal("adc")
-        )
-        self.specials += Instance("BUFR",
-            p_BUFR_DIVIDE = "4",
-            i_I = adc_clk,
-            o_O = ClockSignal("adc_frame")
-        )
-        self.specials += AsyncResetSynchronizer(self.cd_adc_frame, self._control.fields.frame_rst)
+        if pads is not None:
+            self.clock_domains.cd_adc       = ClockDomain() # ADC Bitclock.
+            self.clock_domains.cd_adc_frame = ClockDomain() # ADC Frameclock (freq : ADC Bitclock/8).
+            adc_clk = Signal()
+            self.specials += Instance("IBUFDS",
+                i_I  = pads.lclk_p,
+                i_IB = pads.lclk_n,
+                o_O  = adc_clk
+            )
+            self.specials += Instance("BUFIO",
+                i_I = adc_clk,
+                o_O = ClockSignal("adc")
+            )
+            self.specials += Instance("BUFR",
+                p_BUFR_DIVIDE = "4",
+                i_I = adc_clk,
+                o_O = ClockSignal("adc_frame")
+            )
+            self.specials += AsyncResetSynchronizer(self.cd_adc_frame, self._control.fields.frame_rst)
 
         # LVDS Reception & Deserialization.
         # ---------------------------------
 
-        bitslip = Signal()
+        if pads is not None:
+            bitslip = Signal()
 
-        # Receive & Deserialize Frame clock to use it as a delimiter for the data.
-        fclk_no_delay = Signal()
-        fclk_delayed  = Signal()
-        fclk          = Signal(8)
-        self.specials += [
-            Instance("IBUFDS",
-                i_I  = pads.fclk_p,
-                i_IB = pads.fclk_n,
-                o_O  = fclk_no_delay
-            ),
-            Instance("IDELAYE2",
-                p_DELAY_SRC             = "IDATAIN",
-                p_SIGNAL_PATTERN        = "DATA",
-                p_CINVCTRL_SEL          = "FALSE",
-                p_HIGH_PERFORMANCE_MODE = "TRUE",
-                p_REFCLK_FREQUENCY      = 200.0,
-                p_PIPE_SEL              = "FALSE",
-                p_IDELAY_TYPE           = "VARIABLE",
-                p_IDELAY_VALUE          = 0,
-
-                i_C        = ClockSignal("sys"),
-                i_LD       = self._control.fields.delay_rst,
-                i_CE       = self._control.fields.delay_inc,
-                i_LDPIPEEN = 0,
-                i_INC      = 1,
-
-                i_IDATAIN  = fclk_no_delay,
-                o_DATAOUT  = fclk_delayed
-            ),
-            Instance("ISERDESE2",
-                p_DATA_WIDTH     = 8,
-                p_DATA_RATE      = "DDR",
-                p_SERDES_MODE    = "MASTER",
-                p_INTERFACE_TYPE = "NETWORKING",
-                p_NUM_CE         = 1,
-                p_IOBDELAY       = "IFD",
-                i_DDLY    = fclk_delayed,
-                i_CE1     = 1,
-                i_RST     =  ResetSignal("adc_frame"),
-                i_CLK     =  ClockSignal("adc"),
-                i_CLKB    = ~ClockSignal("adc"),
-                i_CLKDIV  =  ClockSignal("adc_frame"),
-                i_BITSLIP = bitslip,
-                 **{f"o_Q{n+1}": fclk[8-1-n] for n in range(8)},
-            )
-        ]
-
-        # Check Frame clock synchronization and increment bitslip every 1 ms when not synchronized.
-        fclk_timer = WaitTimer(int(1e-3*sys_clk_freq))
-        fclk_timer = ClockDomainsRenamer("adc_frame")(fclk_timer)
-        self.submodules += fclk_timer
-        self.sync.adc_frame += [
-            bitslip.eq(0),
-            fclk_timer.wait.eq(~fclk_timer.done),
-            If(fclk_timer.done,
-                If((fclk != 0xf) & (fclk != 0x33) & (fclk != 0x55),
-                    bitslip.eq(1)
-                )
-            )
-        ]
-
-        # Receive & Deserialize Data.
-        self.adc_source = adc_source = stream.Endpoint([("data", nchannels*8)])
-        self.comb += adc_source.valid.eq(1)
-        for i in range(nchannels):
-            d_no_delay = Signal()
-            d_delayed  = Signal()
-            d          = Signal(8)
+            # Receive & Deserialize Frame clock to use it as a delimiter for the data.
+            fclk_no_delay = Signal()
+            fclk_delayed  = Signal()
+            fclk          = Signal(8)
             self.specials += [
                 Instance("IBUFDS",
-                    i_I  = pads.d_p[i],
-                    i_IB = pads.d_n[i],
-                    o_O  = d_no_delay
+                    i_I  = pads.fclk_p,
+                    i_IB = pads.fclk_n,
+                    o_O  = fclk_no_delay
                 ),
                 Instance("IDELAYE2",
                     p_DELAY_SRC             = "IDATAIN",
@@ -202,8 +144,8 @@ class HAD1511ADC(Module, AutoCSR):
                     i_LDPIPEEN = 0,
                     i_INC      = 1,
 
-                    i_IDATAIN  = d_no_delay,
-                    o_DATAOUT  = d_delayed
+                    i_IDATAIN  = fclk_no_delay,
+                    o_DATAOUT  = fclk_delayed
                 ),
                 Instance("ISERDESE2",
                     p_DATA_WIDTH     = 8,
@@ -212,17 +154,90 @@ class HAD1511ADC(Module, AutoCSR):
                     p_INTERFACE_TYPE = "NETWORKING",
                     p_NUM_CE         = 1,
                     p_IOBDELAY       = "IFD",
-                    i_DDLY    = d_delayed,
+                    i_DDLY    = fclk_delayed,
                     i_CE1     = 1,
                     i_RST     =  ResetSignal("adc_frame"),
                     i_CLK     =  ClockSignal("adc"),
                     i_CLKB    = ~ClockSignal("adc"),
                     i_CLKDIV  =  ClockSignal("adc_frame"),
                     i_BITSLIP = bitslip,
-                     **{f"o_Q{n+1}": d[8-1-n] for n in range(8)},
+                     **{f"o_Q{n+1}": fclk[8-1-n] for n in range(8)},
                 )
             ]
-            self.comb += adc_source.data[8*i:8*(i+1)].eq(d if polarity == 0 else (d ^ 0xff))
+
+            # Check Frame clock synchronization and increment bitslip every 1 ms when not synchronized.
+            fclk_timer = WaitTimer(int(1e-3*sys_clk_freq))
+            fclk_timer = ClockDomainsRenamer("adc_frame")(fclk_timer)
+            self.submodules += fclk_timer
+            self.sync.adc_frame += [
+                bitslip.eq(0),
+                fclk_timer.wait.eq(~fclk_timer.done),
+                If(fclk_timer.done,
+                    If((fclk != 0xf) & (fclk != 0x33) & (fclk != 0x55),
+                        bitslip.eq(1)
+                    )
+                )
+            ]
+
+            # Receive & Deserialize Data.
+            self.adc_source = adc_source = stream.Endpoint([("data", nchannels*8)])
+            self.comb += adc_source.valid.eq(1)
+            for i in range(nchannels):
+                d_no_delay = Signal()
+                d_delayed  = Signal()
+                d          = Signal(8)
+                self.specials += [
+                    Instance("IBUFDS",
+                        i_I  = pads.d_p[i],
+                        i_IB = pads.d_n[i],
+                        o_O  = d_no_delay
+                    ),
+                    Instance("IDELAYE2",
+                        p_DELAY_SRC             = "IDATAIN",
+                        p_SIGNAL_PATTERN        = "DATA",
+                        p_CINVCTRL_SEL          = "FALSE",
+                        p_HIGH_PERFORMANCE_MODE = "TRUE",
+                        p_REFCLK_FREQUENCY      = 200.0,
+                        p_PIPE_SEL              = "FALSE",
+                        p_IDELAY_TYPE           = "VARIABLE",
+                        p_IDELAY_VALUE          = 0,
+
+                        i_C        = ClockSignal("sys"),
+                        i_LD       = self._control.fields.delay_rst,
+                        i_CE       = self._control.fields.delay_inc,
+                        i_LDPIPEEN = 0,
+                        i_INC      = 1,
+
+                        i_IDATAIN  = d_no_delay,
+                        o_DATAOUT  = d_delayed
+                    ),
+                    Instance("ISERDESE2",
+                        p_DATA_WIDTH     = 8,
+                        p_DATA_RATE      = "DDR",
+                        p_SERDES_MODE    = "MASTER",
+                        p_INTERFACE_TYPE = "NETWORKING",
+                        p_NUM_CE         = 1,
+                        p_IOBDELAY       = "IFD",
+                        i_DDLY    = d_delayed,
+                        i_CE1     = 1,
+                        i_RST     =  ResetSignal("adc_frame"),
+                        i_CLK     =  ClockSignal("adc"),
+                        i_CLKB    = ~ClockSignal("adc"),
+                        i_CLKDIV  =  ClockSignal("adc_frame"),
+                        i_BITSLIP = bitslip,
+                         **{f"o_Q{n+1}": d[8-1-n] for n in range(8)},
+                    )
+                ]
+                self.comb += adc_source.data[8*i:8*(i+1)].eq(d if polarity == 0 else (d ^ 0xff))
+
+        if pads is None:
+            self.adc_source = adc_source = stream.Endpoint([("data", nchannels*8)])
+            self.comb += adc_source.valid.eq(1)
+            # Generate a Ramp Pattern when no pads are provided.
+            for i in range(nchannels):
+                adc_data = Signal(8)
+                self.sync.adc_frame += adc_data.eq(adc_data + nchannels)
+                self.sync.adc_frame += adc_source.data[8*i:8*(i+1)].eq(adc_data + i)
 
         # Clock Domain Crossing.
         # ----------------------
