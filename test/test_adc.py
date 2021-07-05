@@ -134,7 +134,7 @@ def adc_test(port,
         adc_samplerate   = adcs[n//2].get_samplerate()/len(adc_channels)
         print(f"- Min: {adc_min}")
         print(f"- Max: {adc_max}")
-        print(f"- Dynamic: {adc_max - adc_min}")
+        print(f"- Dynamic: {abs(adc_max - adc_min)}")
         print(f"- Samplerate: ~{adc_samplerate/1e6}MSa/s ({adc_samplerate*8/1e9}Gb/s)")
 
 
@@ -236,7 +236,7 @@ def main():
     parser.add_argument("--afe-center",     action="store_true",             help="Center Signal with Offset DAC.")
 
     # Trigger Parameters.
-    parser.add_argument("--trig-offset",    default=0,                       help="Trigger Offset (0-255).")
+    parser.add_argument("--trig-offset",    default="0",                     help="Trigger Offset (0-255).")
 
     # Dump Parameters.
     parser.add_argument("--dump", default="", help="Dump captured data to specified CSV file.")
