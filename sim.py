@@ -6,6 +6,7 @@
 # Copyright (c) 2020-2021 Florent Kermarrec <florent@enjoy-digital.fr>
 # SPDX-License-Identifier: BSD-2-Clause
 
+import os
 import argparse
 
 from migen import *
@@ -16,6 +17,7 @@ from litex.build.sim.config import SimConfig
 
 from litex.soc.integration.soc_core import *
 from litex.soc.integration.builder import *
+from litex.soc.cores.spi import SPIMaster
 from litex.soc.interconnect import stream
 
 from litedram.common import PhySettings
@@ -25,14 +27,38 @@ from litedram.frontend.dma import LiteDRAMDMAWriter
 
 from liteeth.phy.model import LiteEthPHYModel
 
+from peripherals.frontpanel import FrontpanelLeds, FrontpanelButtons, FP_BTNS
+from peripherals.offset_dac import OffsetDAC
+from peripherals.had1511_adc import HAD1511ADC
+from peripherals.trigger import Trigger
 from peripherals.dma_upload import DMAUpload
 
-# IOs ----------------------------------------------------------------------------------------------
+from litescope import LiteScopeAnalyzer
 
-_io = [
+# Scope IOs ----------------------------------------------------------------------------------------
+
+scope_ios = [
     # Clk / Rst.
-    ("sys_clk", 0, Pins(1)),
-    ("sys_rst", 0, Pins(1)),
+    ("sys_clk",   0, Pins(1)),
+    ("sys_rst",   0, Pins(1)),
+
+    # Offset DAC
+    ("offset_dac", 0,
+        # DAC.
+        Subsignal("sclk",   Pins(1)),
+        Subsignal("din",    Pins(1)),
+        Subsignal("sync_n", Pins(1)),
+        # Mux.
+        Subsignal("s",   Pins(3)),
+        Subsignal("e_n", Pins(1)),
+    ),
+
+    # SPI
+    ("spi", 0,
+        Subsignal("clk",  Pins(1)),
+        Subsignal("mosi", Pins(1)),
+        Subsignal("cs_n", Pins(8)), # PLL, ADC0, ADC1, FE, VGA1, VGA2, VGA3, VGA4
+    ),
 
     # Ethernet.
     ("eth_clocks", 0,
@@ -54,7 +80,7 @@ _io = [
 
 class Platform(SimPlatform):
     def __init__(self):
-        SimPlatform.__init__(self, "SIM", _io)
+        SimPlatform.__init__(self, "SIM", scope_ios)
 
 # ScopeSoC -----------------------------------------------------------------------------------------
 
@@ -77,6 +103,10 @@ class ScopeSoC(SoCCore):
 
         # CRG --------------------------------------------------------------------------------------
         self.submodules.crg = CRG(platform.request("sys_clk"))
+        self.clock_domains.cd_adc_frame = ClockDomain()
+        adc_frame_counter = Signal(16)
+        self.sync += adc_frame_counter.eq(adc_frame_counter + 1)
+        self.comb += self.cd_adc_frame.clk.eq(adc_frame_counter[1])
 
         # DDR3 SDRAM --------------------------------------------------------------------------------
         from litex.tools.litex_sim import get_sdram_phy_settings
@@ -102,6 +132,129 @@ class ScopeSoC(SoCCore):
         # Etherbone --------------------------------------------------------------------------------
         self.submodules.ethphy = LiteEthPHYModel(self.platform.request("eth"))
         self.add_etherbone(phy=self.ethphy, ip_address=scope_ip)
+        # Frontpanel Leds --------------------------------------------------------------------------
+        fpleds_pads = Record([("cs_n", 1), ("clk", 1), ("mosi", 1), ("oe", 1)])
+        self.submodules.fpleds = FrontpanelLeds(fpleds_pads, sys_clk_freq)
+
+        # Frontpanel Buttons -----------------------------------------------------------------------
+        fpbtns_pads = Record([("cs_n", 1), ("clk", 1), ("miso", 1)])
+        self.submodules.fpbtns = FrontpanelButtons(fpbtns_pads, sys_clk_freq)
+
+        # Scope ------------------------------------------------------------------------------------
+        #
+        # Description
+        # -----------
+        # The SDS1104X-E is equipped with 2 x 1GSa/s HMCAD1511 8-bit ADDs and has 4 independent
+        # frontends for each channel:
+        #                                          SPI
+        #                                (PLL/ADC/Frontends config)
+        #                                           ▲
+        #                                           │
+        #                                       ┌───┴───┐
+        #                           LVDS(8-bit) │       │ LVDS (8-bit)
+        #                             ┌────────►│ FPGA  │◄────────┐
+        #                             │         │       │         │
+        #                             │         └───────┘         │
+        #                             │                           │
+        #                          ┌──┴───┐      ┌─────┐      ┌───┴──┐
+        #                          │ ADC0 │◄─────┤ PLL ├─────►│ ADC1 │
+        #                          │   H  │      └─────┘      │   H  │
+        #                       ┌─►│AD1511│◄──┐  ADF4360   ┌─►│AD1511│◄──┐
+        #                       │  └──────┘   │            │  └──────┘   │
+        #                       │             │            │             │
+        #                  ┌────┴────┐   ┌────┴────┐  ┌────┴────┐   ┌────┴────┐
+        #                  │Frontend0│   │Frontend1│  │Frontend2│   │Frontend3│
+        #                  └────┬────┘   └────┬────┘  └────┬────┘   └────┬────┘
+        #                       │             │            │             │
+        #                       │             │            │             │
+        #                      BNC0          BNC1         BNC2          BNC3
+        #
+        # Each ADC is connected to 2 frontends, allowing up to 1GSa/s when selecting only 1 channel
+        # and up to 500MSa/s with the 2 channels.
+        # A common PLL is used to generate the reference clocks of the ADCs.
+        # A common SPI bus is used for the control, with separate CS pins for each chip/part:
+        # - CS0: PLL.
+        # - CS1: ADC0.
+        # - CS2: ADC1.
+        # - CS3: Frontend (40-bit shift register).
+        # - CS4..7: Variable Gain Amplifier CH1..CH4.
+        #
+        # Frontends
+        # ---------
+        # Each frontend is composed of 2 x 10:1 dividers, AC coupling, BW limitation features, a
+        # a AD8370 Variable Gain Amplifier (VGA) and a AD4932 ADC Driver:
+        #
+        #                      ┌──────────────────┐  ┌──────┐  ┌────────┐
+        #                      │ 2 x 10:1 Dividers│  │  VGA │  │  ADC   │
+        #                 BNC─►│ AC/DC coupling   ├─►│      ├─►│ Driver ├─►To ADC
+        #                      │ BW limitation    │  │AD8370│  │ AD4932 │
+        #                      └──────────────────┘  └──────┘  └────────┘
+        #
+        # Frontends are controlled through a 40-bit shift register (8-bit shift register for each
+        # channel + 1 ? shift register) (over the SPI bus), with the following bit mapping for
+        # each channel:
+        # - bit 0: ?
+        # - bit 1: First  10:1 divider, active high.
+        # - bit 2: Second 10:1 divider, active high.
+        # - bit 3: AC coupling, low = AC, high = DC.
+        # - bit 4: PGA enable, active high.
+        # - bit 5: BW limit, low = 20MHz, high = full.
+        # - bit 6: ?
+        # - bit 7: ?
+        # To set reasonable defaults (1V range) 0x78 can be used.
+        # FIXME: Understand unknown bits.
+        # FIXME: Understand why 40 total bit instead of 32-bit (4x8-bit).
+        #
+        # PLL
+        # ---
+        # Use these settings:
+        #  - 40 31 20 # CONTROL
+        #  - 04 E1 42 # NCOUNTER
+        #  - 00 07 D1 # RCOUNTER
+        #  FIXME: Document.
+        #
+        # ADC
+        # ---
+        # Needs a slighly more complicated setup.
+        # https://github.com/360nosc0pe/software/blob/master/cheapscope/cheapscope.py has some example code.
+        #
+        # Total channel gain:
+        # Each channel has two 10:1 dividers, a VGA and an ADC gain.
+        # The dividers are configured in the FE bits.
+        # Each VGA is on its own chip-select, see AD8370 spec.
+        # The two ADCs are on separate chip selects. +0, +2, +4, +6, +9 dB can be selected.
+
+        # Offset DAC/MUX
+        # --------------
+        self.submodules.offset_dac = OffsetDAC(platform.request("offset_dac"),
+            sys_clk_freq = sys_clk_freq,
+            spi_clk_freq = int(250e3)
+        )
+
+        # ADC + Frontends
+        # ---------------
+
+        # SPI.
+        pads = self.platform.request("spi")
+        pads.miso = Signal()
+        self.submodules.spi = SPIMaster(pads, 48, self.sys_clk_freq, 8e6)
+
+        # Trigger.
+        self.submodules.trigger = Trigger()
+
+        # ADCs + DMAs.
+        for i in range(2):
+            adc  = HAD1511ADC(None, sys_clk_freq, polarity=1)
+            gate = stream.Gate([("data", 64)], sink_ready_when_disabled=True)
+            port = self.sdram.crossbar.get_port()
+            conv = stream.Converter(64, port.data_width)
+            dma  = LiteDRAMDMAWriter(self.sdram.crossbar.get_port(), fifo_depth=16, with_csr=True)
+            setattr(self.submodules, f"adc{i}",       adc)
+            setattr(self.submodules, f"adc{i}_gate", gate)
+            setattr(self.submodules, f"adc{i}_conv", conv)
+            setattr(self.submodules, f"adc{i}_dma",   dma)
+            self.submodules += stream.Pipeline(adc, gate, conv, dma)
+            self.comb += gate.enable.eq(self.trigger.enable)
 
         # DMA Upload -------------------------------------------------------------------------------
         self.submodules.dma_upload = DMAUpload(
@@ -127,6 +280,7 @@ def main():
     # Sim Configuration
     # -----------------
     sim_config = SimConfig(default_clk="sys_clk")
+    sim_config.add_clocker("sys_clk", freq_hz=100e6)
     sim_config.add_module("ethernet", "eth", args={"interface": "tap0", "ip": "192.168.1.100"})
 
     # Build
