@@ -89,8 +89,8 @@ class FP_BTNS(IntEnum):
 # Frontpanel Leds ----------------------------------------------------------------------------------
 
 class FrontpanelLeds(Module, AutoCSR):
-    def __init__(self, pads, sys_clk_freq):
-        self.value = CSRStorage(19)
+    def __init__(self, pads, sys_clk_freq, with_csr=True):
+        self.value = Signal(19)
 
         # # #
 
@@ -107,15 +107,23 @@ class FrontpanelLeds(Module, AutoCSR):
         self.comb += pads.oe.eq(0)
 
         # SPI Control.
-        self.sync += If(spi.done, spi.mosi.eq(self.value.storage)) # Update SPI MOSI when Xfer done.
+        self.sync += If(spi.done, spi.mosi.eq(self.value)) # Update SPI MOSI when Xfer done.
         self.comb += spi.length.eq(19)
         self.sync += spi.start.eq(spi.done) # Continous SPI Xfers.
+
+        # CSR (Optional).
+        if with_csr:
+            self.add_csr()
+
+    def add_csr(self):
+        self._value = CSRStorage(19)
+        self.comb += self.value.eq(self.value.storage)
 
 # Frontpanel Buttons -------------------------------------------------------------------------------
 
 class FrontpanelButtons(Module, AutoCSR):
-    def __init__(self, pads, sys_clk_freq):
-        self.value = CSRStatus(64)
+    def __init__(self, pads, sys_clk_freq, with_csr=True):
+        self.value = Signal(64)
 
         # # #
 
@@ -129,10 +137,13 @@ class FrontpanelButtons(Module, AutoCSR):
         )
 
         # SPI Control.
-        self.sync += If(spi.done, self.value.status.eq(spi.miso)) # Update Value when SPI Xfer done.
+        self.sync += If(spi.done, self.value.eq(spi.miso)) # Update Value when SPI Xfer done.
         self.comb += spi.length.eq(64)
         self.sync += spi.start.eq(spi.done) # Continous SPI Xfers.
 
+    def add_csr(self):
+        self._value = CSRStatus(64)
+        self.comb += self._value.eq(self.value)
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 #                                  S O F T W A R E                                                 #
