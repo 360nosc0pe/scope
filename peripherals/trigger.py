@@ -6,6 +6,8 @@
 
 from migen import *
 
+from litex.gen import *
+
 from litex.soc.interconnect.csr import *
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
@@ -24,7 +26,7 @@ TRIGGER_CONTROL_ENABLE = (1 << 0)
 #                                  G A T E W A R E                                                 #
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
-class Trigger(Module, AutoCSR):
+class Trigger(LiteXModule):
     def __init__(self):
         # Control/Status.
         self._control = CSRStorage(fields=[

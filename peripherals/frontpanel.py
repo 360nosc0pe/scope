@@ -9,6 +9,8 @@ from enum import IntEnum
 
 from migen import *
 
+from litex.gen import *
+
 from litex.soc.interconnect.csr import *
 from litex.soc.cores.spi import SPIMaster
 
@@ -88,7 +90,7 @@ class FP_BTNS(IntEnum):
 
 # Frontpanel Leds ----------------------------------------------------------------------------------
 
-class FrontpanelLeds(Module, AutoCSR):
+class FrontpanelLeds(LiteXModule):
     def __init__(self, pads, sys_clk_freq, with_csr=True):
         self.value = Signal(19)
 
@@ -96,7 +98,7 @@ class FrontpanelLeds(Module, AutoCSR):
 
         # SPI Master.
         pads.miso = Signal() # Add fake MISO pad.
-        self.submodules.spi = spi = SPIMaster(pads,
+        self.spi = spi = SPIMaster(pads,
             data_width   = 19,
             sys_clk_freq = sys_clk_freq,
             spi_clk_freq = 100e3,
@@ -121,7 +123,7 @@ class FrontpanelLeds(Module, AutoCSR):
 
 # Frontpanel Buttons -------------------------------------------------------------------------------
 
-class FrontpanelButtons(Module, AutoCSR):
+class FrontpanelButtons(LiteXModule):
     def __init__(self, pads, sys_clk_freq, with_csr=True):
         self.value = Signal(64)
 
@@ -129,7 +131,7 @@ class FrontpanelButtons(Module, AutoCSR):
 
         # SPI Master.
         pads.mosi = Signal() # Add fake MOSI pad.
-        self.submodules.spi = spi = SPIMaster(pads,
+        self.spi = spi = SPIMaster(pads,
             data_width   = 64,
             sys_clk_freq = sys_clk_freq,
             spi_clk_freq = 100e3,

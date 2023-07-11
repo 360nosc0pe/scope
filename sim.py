@@ -11,6 +11,8 @@ import argparse
 
 from migen import *
 
+from litex.gen import *
+
 from litex.build.generic_platform import *
 from litex.build.sim import SimPlatform
 from litex.build.sim.config import SimConfig
@@ -102,8 +104,8 @@ class ScopeSoC(SoCCore):
         self.add_constant("CONFIG_DISABLE_DELAYS")
 
         # CRG --------------------------------------------------------------------------------------
-        self.submodules.crg = CRG(platform.request("sys_clk"))
-        self.clock_domains.cd_adc_frame = ClockDomain()
+        self.crg = CRG(platform.request("sys_clk"))
+        self.cd_adc_frame = ClockDomain()
         adc_frame_counter = Signal(16)
         self.sync += adc_frame_counter.eq(adc_frame_counter + 1)
         self.comb += self.cd_adc_frame.clk.eq(adc_frame_counter[1])
@@ -116,7 +118,7 @@ class ScopeSoC(SoCCore):
             data_width = 32,
             clk_freq   = sys_clk_freq,
         )
-        self.submodules.ddrphy = SDRAMPHYModel(
+        self.ddrphy = SDRAMPHYModel(
             module    = dram_module,
             settings  = phy_settings,
             clk_freq  = sys_clk_freq,
@@ -130,15 +132,15 @@ class ScopeSoC(SoCCore):
         self.add_constant("SDRAM_TEST_DISABLE") # Disable SDRAM test for simulation speedup.
 
         # Etherbone --------------------------------------------------------------------------------
-        self.submodules.ethphy = LiteEthPHYModel(self.platform.request("eth"))
+        self.ethphy = LiteEthPHYModel(self.platform.request("eth"))
         self.add_etherbone(phy=self.ethphy, ip_address=scope_ip)
         # Frontpanel Leds --------------------------------------------------------------------------
         fpleds_pads = Record([("cs_n", 1), ("clk", 1), ("mosi", 1), ("oe", 1)])
-        self.submodules.fpleds = FrontpanelLeds(fpleds_pads, sys_clk_freq)
+        self.fpleds = FrontpanelLeds(fpleds_pads, sys_clk_freq)
 
         # Frontpanel Buttons -----------------------------------------------------------------------
         fpbtns_pads = Record([("cs_n", 1), ("clk", 1), ("miso", 1)])
-        self.submodules.fpbtns = FrontpanelButtons(fpbtns_pads, sys_clk_freq)
+        self.fpbtns = FrontpanelButtons(fpbtns_pads, sys_clk_freq)
 
         # Scope ------------------------------------------------------------------------------------
         #
@@ -226,7 +228,7 @@ class ScopeSoC(SoCCore):
 
         # Offset DAC/MUX
         # --------------
-        self.submodules.offset_dac = OffsetDAC(platform.request("offset_dac"),
+        self.offset_dac = OffsetDAC(platform.request("offset_dac"),
             sys_clk_freq = sys_clk_freq,
             spi_clk_freq = int(250e3)
         )
@@ -237,10 +239,10 @@ class ScopeSoC(SoCCore):
         # SPI.
         pads = self.platform.request("spi")
         pads.miso = Signal()
-        self.submodules.spi = SPIMaster(pads, 48, self.sys_clk_freq, 8e6)
+        self.spi = SPIMaster(pads, 48, self.sys_clk_freq, 8e6)
 
         # Trigger.
-        self.submodules.trigger = Trigger()
+        self.trigger = Trigger()
 
         # ADCs + DMAs.
         for i in range(2):
@@ -257,7 +259,7 @@ class ScopeSoC(SoCCore):
             self.comb += gate.enable.eq(self.trigger.enable)
 
         # DMA Upload -------------------------------------------------------------------------------
-        self.submodules.dma_upload = DMAUpload(
+        self.dma_upload = DMAUpload(
             dram_port = self.sdram.crossbar.get_port(),
             udp_port  = self.ethcore_etherbone.udp.crossbar.get_port(host_udp_port, dw=8),
             dst_ip       = host_ip,

@@ -6,7 +6,9 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 from migen import *
-from migen.genlib.misc import WaitTimer
+
+from litex.gen import *
+from litex.gen.genlib.misc import WaitTimer
 
 from litex.soc.interconnect.csr import *
 
@@ -86,7 +88,7 @@ offset_dac_layout = [
 
 # Offset DAC ---------------------------------------------------------------------------------------
 
-class OffsetDAC(Module, AutoCSR):
+class OffsetDAC(LiteXModule):
     def __init__(self, pads=None, sys_clk_freq=int(100e6), spi_clk_freq=int(250e3), default_enable=0):
         pads = pads if pads is not None else Record(offset_dac_layout)
         pads.e_n.reset = 1 # Disable Mux update by default.
@@ -129,7 +131,7 @@ class OffsetDAC(Module, AutoCSR):
         run     = Signal()
         channel = Signal(2)
         offset  = Signal(16)
-        self.submodules.fsm = fsm = FSM(reset_state="IDLE")
+        self.fsm = fsm = FSM(reset_state="IDLE")
         fsm.act("IDLE",
             NextValue(run, 0),
             If(self._control.fields.enable,

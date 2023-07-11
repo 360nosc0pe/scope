@@ -12,6 +12,8 @@ import argparse
 
 from migen import *
 
+from litex.gen import *
+
 from litex.build.generic_platform import *
 
 from litex_boards.platforms import siglent_sds1104xe
@@ -85,14 +87,14 @@ scope_ios = [
 
 # CRG ----------------------------------------------------------------------------------------------
 
-class _CRG(Module):
+class _CRG(LiteXModule):
     def __init__(self, platform, sys_clk_freq, with_ethernet=False):
         self.rst = Signal()
-        self.clock_domains.cd_sys       = ClockDomain()
-        self.clock_domains.cd_sys4x     = ClockDomain(reset_less=True)
-        self.clock_domains.cd_sys4x_dqs = ClockDomain(reset_less=True)
-        self.clock_domains.cd_idelay    = ClockDomain()
-        self.clock_domains.cd_lcd       = ClockDomain()
+        self.cd_sys       = ClockDomain()
+        self.cd_sys4x     = ClockDomain(reset_less=True)
+        self.cd_sys4x_dqs = ClockDomain(reset_less=True)
+        self.cd_idelay    = ClockDomain()
+        self.cd_lcd       = ClockDomain()
 
         # # #
 
@@ -100,7 +102,7 @@ class _CRG(Module):
         clk25 = ClockSignal("eth_tx") if with_ethernet else platform.request("eth_clocks").rx
 
         # PLL
-        self.submodules.pll = pll = S7PLL(speedgrade=-1)
+        self.pll = pll = S7PLL(speedgrade=-1)
         pll.register_clkin(clk25, 25e6)
         pll.create_clkout(self.cd_sys,       sys_clk_freq)
         pll.create_clkout(self.cd_sys4x,     4*sys_clk_freq)
@@ -109,7 +111,7 @@ class _CRG(Module):
         pll.create_clkout(self.cd_lcd,       33.3e6)
         platform.add_false_path_constraints(self.cd_sys.clk, pll.clkin) # Ignore sys_clk to pll.clkin path created by SoC's rst.
 
-        self.submodules.idelayctrl = S7IDELAYCTRL(self.cd_idelay)
+        self.idelayctrl = S7IDELAYCTRL(self.cd_idelay)
 
 
 # ScopeSoC -----------------------------------------------------------------------------------------
@@ -132,7 +134,7 @@ class ScopeSoC(SoCCore):
         self.uart.add_auto_tx_flush(sys_clk_freq=sys_clk_freq, timeout=1, interval=128)
 
         # DDR3 SDRAM -------------------------------------------------------------------------------
-        self.submodules.ddrphy = s7ddrphy.A7DDRPHY(platform.request("ddram"),
+        self.ddrphy = s7ddrphy.A7DDRPHY(platform.request("ddram"),
             memtype        = "DDR3",
             nphases        = 4,
             sys_clk_freq   = sys_clk_freq)
@@ -144,19 +146,19 @@ class ScopeSoC(SoCCore):
         )
 
         # CRG --------------------------------------------------------------------------------------
-        self.submodules.crg = _CRG(platform, sys_clk_freq, with_ethernet=True)
+        self.crg = _CRG(platform, sys_clk_freq, with_ethernet=True)
 
         # Etherbone --------------------------------------------------------------------------------
-        self.submodules.ethphy = LiteEthPHYMII(
+        self.ethphy = LiteEthPHYMII(
             clock_pads = self.platform.request("eth_clocks"),
             pads       = self.platform.request("eth"))
         self.add_etherbone(phy=self.ethphy, ip_address=scope_ip)
 
         # Frontpanel Leds --------------------------------------------------------------------------
-        self.submodules.fpleds = FrontpanelLeds(platform.request("led_frontpanel"), sys_clk_freq)
+        self.fpleds = FrontpanelLeds(platform.request("led_frontpanel"), sys_clk_freq)
 
         # Frontpanel Buttons -----------------------------------------------------------------------
-        self.submodules.fpbtns = FrontpanelButtons(platform.request("btn_frontpanel"), sys_clk_freq)
+        self.fpbtns = FrontpanelButtons(platform.request("btn_frontpanel"), sys_clk_freq)
 
         # LCD --------------------------------------------------------------------------------------
         video_timings = ("800x480@60Hz", {
@@ -170,8 +172,8 @@ class ScopeSoC(SoCCore):
             "v_sync_offset" : 22,
             "v_sync_width"  : 1,
         })
-        self.submodules.lcdphy = VideoVGAPHY(platform.request("lcd"), clock_domain="lcd")
-        self.submodules.lcdphy_mux = stream.Multiplexer(self.lcdphy.sink.description, n=2)
+        self.lcdphy = VideoVGAPHY(platform.request("lcd"), clock_domain="lcd")
+        self.lcdphy_mux = stream.Multiplexer(self.lcdphy.sink.description, n=2)
         self.add_video_framebuffer(phy=self.lcdphy_mux.sink0, timings=video_timings, clock_domain="lcd")
         self.add_video_terminal(   phy=self.lcdphy_mux.sink1, timings=video_timings, clock_domain="lcd")
         self.comb += self.lcdphy_mux.source.connect(self.lcdphy.sink)
@@ -267,7 +269,7 @@ class ScopeSoC(SoCCore):
 
         # Offset DAC/MUX
         # --------------
-        self.submodules.offset_dac = OffsetDAC(platform.request("offset_dac"),
+        self.offset_dac = OffsetDAC(platform.request("offset_dac"),
             sys_clk_freq = sys_clk_freq,
             spi_clk_freq = int(250e3)
         )
@@ -278,10 +280,10 @@ class ScopeSoC(SoCCore):
         # SPI.
         pads = self.platform.request("spi")
         pads.miso = Signal()
-        self.submodules.spi = SPIMaster(pads, 48, self.sys_clk_freq, 8e6)
+        self.spi = SPIMaster(pads, 48, self.sys_clk_freq, 8e6)
 
         # Trigger.
-        self.submodules.trigger = Trigger()
+        self.trigger = Trigger()
 
         # ADCs + DMAs.
         for i in range(2):
@@ -298,7 +300,7 @@ class ScopeSoC(SoCCore):
             self.comb += gate.enable.eq(self.trigger.enable)
 
         # DMA Upload -------------------------------------------------------------------------------
-        self.submodules.dma_upload = DMAUpload(
+        self.dma_upload = DMAUpload(
             dram_port = self.sdram.crossbar.get_port(),
             udp_port  = self.ethcore_etherbone.udp.crossbar.get_port(host_udp_port, dw=8),
             dst_ip       = host_ip,
@@ -313,7 +315,7 @@ class ScopeSoC(SoCCore):
                 self.udp_cdc.source,
                 self.udp_streamer.sink
             ]
-            self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals,
+            self.analyzer = LiteScopeAnalyzer(analyzer_signals,
                 depth        = 1024,
                 clock_domain = "sys",
                 csr_csv      = "test/analyzer.csv"

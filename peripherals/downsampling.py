@@ -6,6 +6,8 @@
 
 from migen import *
 
+from litex.gen import *
+
 from litex.soc.interconnect import stream
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
@@ -36,7 +38,7 @@ from litex.soc.interconnect import stream
 
 # DownSampling -------------------------------------------------------------------------------------
 
-class DownSamplingStage1(Module):
+class DownSamplingStage1(LiteXModule):
     def __init__(self, ratio):
         self.sink   = sink   = stream.Endpoint([("data", 64)])
         self.source = source = stream.Endpoint([("data", 64)])
@@ -61,7 +63,7 @@ class DownSamplingStage1(Module):
         ]
         self.comb += source.valid.eq(sink.valid & (count == 0))
 
-class DownSamplingStage2(Module):
+class DownSamplingStage2(LiteXModule):
     def __init__(self, ratio):
         self.sink   = sink   = stream.Endpoint([("data", 64)])
         self.source = source = stream.Endpoint([("data", 64)])
@@ -101,7 +103,7 @@ class DownSamplingStage2(Module):
             )
         ]
 
-class DownSampling(Module):
+class DownSampling(LiteXModule):
     def __init__(self, ratio=None):
         self.ratio  = ratio if ratio is not None else Signal(16)
         self.sink   = sink   = stream.Endpoint([("data", 64)])

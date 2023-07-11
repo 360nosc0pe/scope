@@ -10,7 +10,8 @@ import time
 from migen import *
 from migen.genlib.resetsync import AsyncResetSynchronizer
 
-from migen.genlib.misc import WaitTimer
+from litex.gen import *
+from litex.gen.genlib.misc import WaitTimer
 
 from litex.soc.interconnect.csr import *
 from litex.soc.interconnect import stream
@@ -56,7 +57,7 @@ had1511_phy_layout = ["fclk_p", "fclk_n", "lclk_p", "lclk_n", "d_p", "d_n"]
 
 # HAD1511 ADC --------------------------------------------------------------------------------------
 
-class HAD1511ADC(Module, AutoCSR):
+class HAD1511ADC(LiteXModule):
     def __init__(self, pads, sys_clk_freq, polarity=0, clock_domain="sys"):
         # Parameters.
         if pads is not None:
@@ -93,8 +94,8 @@ class HAD1511ADC(Module, AutoCSR):
         # ---------
 
         if pads is not None:
-            self.clock_domains.cd_adc       = ClockDomain() # ADC Bitclock.
-            self.clock_domains.cd_adc_frame = ClockDomain() # ADC Frameclock (freq : ADC Bitclock/8).
+            self.cd_adc       = ClockDomain() # ADC Bitclock.
+            self.cd_adc_frame = ClockDomain() # ADC Frameclock (freq : ADC Bitclock/8).
             adc_clk = Signal()
             self.specials += Instance("IBUFDS",
                 i_I  = pads.lclk_p,
@@ -242,7 +243,7 @@ class HAD1511ADC(Module, AutoCSR):
         # Clock Domain Crossing.
         # ----------------------
 
-        self.submodules.cdc = stream.ClockDomainCrossing(
+        self.cdc = stream.ClockDomainCrossing(
             layout  = [("data", nchannels*8)],
             cd_from = "adc_frame",
             cd_to   = clock_domain
@@ -252,7 +253,7 @@ class HAD1511ADC(Module, AutoCSR):
         # DownSampling.
         # -------------
 
-        self.submodules.downsampling = DownSampling(ratio=self._downsampling.storage)
+        self.downsampling = DownSampling(ratio=self._downsampling.storage)
         self.comb += self.cdc.source.connect(self.downsampling.sink)
         self.comb += self.downsampling.source.connect(source)
         self.comb += self.downsampling.source.ready.eq(1) # No backpressure allowed.

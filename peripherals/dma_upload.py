@@ -6,6 +6,8 @@
 
 import socket
 
+from litex.gen import *
+
 from peripherals.spi import *
 
 from litex.soc.interconnect.csr import *
@@ -32,12 +34,12 @@ from liteeth.frontend.stream import LiteEthStream2UDPTX
 #                                  G A T E W A R E                                                 #
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
 
-class DMAUpload(Module, AutoCSR):
+class DMAUpload(LiteXModule):
     def __init__(self, dram_port, udp_port, dst_ip, dst_udp_port):
         # DMA Reader
         # ----------
-        self.submodules.dma_reader      = LiteDRAMDMAReader(dram_port, fifo_depth=16, with_csr=True)
-        self.submodules.dma_reader_conv = stream.Converter(dram_port.data_width, 8)
+        self.dma_reader      = LiteDRAMDMAReader(dram_port, fifo_depth=16, with_csr=True)
+        self.dma_reader_conv = stream.Converter(dram_port.data_width, 8)
 
         # UDP Streamer
         # ------------
@@ -47,8 +49,8 @@ class DMAUpload(Module, AutoCSR):
             fifo_depth = 1024,
         )
 
-        self.submodules.udp_cdc      = stream.ClockDomainCrossing([("data", 8)], "sys", "eth_rx")
-        self.submodules.udp_streamer = ClockDomainsRenamer("eth_rx")(udp_streamer)
+        self.udp_cdc      = stream.ClockDomainCrossing([("data", 8)], "sys", "eth_rx")
+        self.udp_streamer = ClockDomainsRenamer("eth_rx")(udp_streamer)
 
         # DMA -> UDP Pipeline
         # -------------------
