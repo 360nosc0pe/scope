@@ -259,7 +259,7 @@ class ScopeSoC(SoCCore):
         # DMA Upload -------------------------------------------------------------------------------
         self.submodules.dma_upload = DMAUpload(
             dram_port = self.sdram.crossbar.get_port(),
-            udp_port  = self.ethcore.udp.crossbar.get_port(host_udp_port, dw=8),
+            udp_port  = self.ethcore_etherbone.udp.crossbar.get_port(host_udp_port, dw=8),
             dst_ip       = host_ip,
             dst_udp_port = host_udp_port
         )

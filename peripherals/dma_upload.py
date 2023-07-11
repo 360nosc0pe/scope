@@ -45,7 +45,6 @@ class DMAUpload(Module, AutoCSR):
             ip_address = convert_ip(dst_ip),
             udp_port   = dst_udp_port,
             fifo_depth = 1024,
-            send_level = 1024
         )
 
         self.submodules.udp_cdc      = stream.ClockDomainCrossing([("data", 8)], "sys", "eth_rx")

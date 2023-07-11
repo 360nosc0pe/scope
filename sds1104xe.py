@@ -14,7 +14,7 @@ from migen import *
 
 from litex.build.generic_platform import *
 
-from litex_boards.platforms import sds1104xe
+from litex_boards.platforms import siglent_sds1104xe
 
 from litex.soc.cores.clock import *
 from litex.soc.integration.soc_core import *
@@ -117,7 +117,7 @@ class _CRG(Module):
 class ScopeSoC(SoCCore):
     def __init__(self, sys_clk_freq=int(100e6), scope_ip="192.168.1.50", host_ip="192.168.1.100", host_udp_port=2000, with_analyzer=False):
         # Platform ---------------------------------------------------------------------------------
-        platform = sds1104xe.Platform()
+        platform = siglent_sds1104xe.Platform()
         platform.add_extension(scope_ios)
 
         # SoCCore ----------------------------------------------------------------------------------
@@ -177,7 +177,7 @@ class ScopeSoC(SoCCore):
         self.comb += self.lcdphy_mux.source.connect(self.lcdphy.sink)
         menu_on_off   = Signal()
         menu_on_off_d = Signal()
-        self.sync += menu_on_off.eq((self.fpbtns.value.status & FP_BTNS.MENU_ON_OFF.value) != 0)
+        self.sync += menu_on_off.eq((self.fpbtns.value & FP_BTNS.MENU_ON_OFF.value) != 0)
         self.sync += menu_on_off_d.eq(menu_on_off)
         self.sync += If(menu_on_off & ~menu_on_off_d, self.lcdphy_mux.sel.eq(~self.lcdphy_mux.sel))
 
@@ -300,7 +300,7 @@ class ScopeSoC(SoCCore):
         # DMA Upload -------------------------------------------------------------------------------
         self.submodules.dma_upload = DMAUpload(
             dram_port = self.sdram.crossbar.get_port(),
-            udp_port  = self.ethcore.udp.crossbar.get_port(host_udp_port, dw=8),
+            udp_port  = self.ethcore_etherbone.udp.crossbar.get_port(host_udp_port, dw=8),
             dst_ip       = host_ip,
             dst_udp_port = host_udp_port
         )

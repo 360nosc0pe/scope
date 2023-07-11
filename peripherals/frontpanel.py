@@ -117,7 +117,7 @@ class FrontpanelLeds(Module, AutoCSR):
 
     def add_csr(self):
         self._value = CSRStorage(19)
-        self.comb += self.value.eq(self.value.storage)
+        self.comb += self.value.eq(self._value.storage)
 
 # Frontpanel Buttons -------------------------------------------------------------------------------
 

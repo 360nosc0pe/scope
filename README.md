@@ -47,7 +47,7 @@ prepare for JTAG boot mode.
 [> Build and Load the bitstream
 --------------------------------
 ```sh
-$ ./sds1104xe.py --eth-ip=192.168.1.50 --build --load
+$ ./sds1104xe.py --scope-ip=192.168.1.50 --build --load
 ```
 
 Instead of `--load` (which uses Vivado's hardware manager), configuration with OpenOCD is also possible:
