@@ -14,26 +14,27 @@ from migen import *
 from litex.gen import *
 
 from litex.build.generic_platform import *
-from litex.build.sim import SimPlatform
-from litex.build.sim.config import SimConfig
+from litex.build.sim              import SimPlatform
+from litex.build.sim.config       import SimConfig
 
 from litex.soc.integration.soc_core import *
 from litex.soc.integration.builder import *
-from litex.soc.cores.spi import SPIMaster
 from litex.soc.interconnect import stream
 
-from litedram.common import PhySettings
-from litedram.modules import MT41K64M16
-from litedram.phy.model import SDRAMPHYModel
+from litex.soc.cores.spi import SPIMaster
+
+from litedram.common       import PhySettings
+from litedram.modules      import MT41K64M16
+from litedram.phy.model    import SDRAMPHYModel
 from litedram.frontend.dma import LiteDRAMDMAWriter
 
 from liteeth.phy.model import LiteEthPHYModel
 
-from peripherals.frontpanel import FrontpanelLeds, FrontpanelButtons, FP_BTNS
-from peripherals.offset_dac import OffsetDAC
+from peripherals.frontpanel  import FrontpanelLeds, FrontpanelButtons, FP_BTNS
+from peripherals.offset_dac  import OffsetDAC
 from peripherals.had1511_adc import HAD1511ADC
-from peripherals.trigger import Trigger
-from peripherals.dma_upload import DMAUpload
+from peripherals.trigger     import Trigger
+from peripherals.dma_upload  import DMAUpload
 
 from litescope import LiteScopeAnalyzer
 

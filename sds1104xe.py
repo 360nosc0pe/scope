@@ -18,24 +18,25 @@ from litex.build.generic_platform import *
 
 from litex_boards.platforms import siglent_sds1104xe
 
-from litex.soc.cores.clock import *
 from litex.soc.integration.soc_core import *
 from litex.soc.integration.builder import *
-from litex.soc.cores.spi import SPIMaster
-from litex.soc.cores.video import VideoVGAPHY
 from litex.soc.interconnect import stream
 
-from litedram.modules import MT41K64M16
-from litedram.phy import s7ddrphy
+from litex.soc.cores.clock  import S7PLL, S7IDELAYCTRL
+from litex.soc.cores.spi    import SPIMaster
+from litex.soc.cores.video  import VideoVGAPHY
+
+from litedram.modules      import MT41K64M16
+from litedram.phy          import s7ddrphy
 from litedram.frontend.dma import LiteDRAMDMAWriter
 
 from liteeth.phy.mii import LiteEthPHYMII
 
-from peripherals.frontpanel import FrontpanelLeds, FrontpanelButtons, FP_BTNS
-from peripherals.offset_dac import OffsetDAC
+from peripherals.frontpanel  import FrontpanelLeds, FrontpanelButtons, FP_BTNS
+from peripherals.offset_dac  import OffsetDAC
 from peripherals.had1511_adc import HAD1511ADC
-from peripherals.trigger import Trigger
-from peripherals.dma_upload import DMAUpload
+from peripherals.trigger     import Trigger
+from peripherals.dma_upload  import DMAUpload
 
 from litescope import LiteScopeAnalyzer
 
@@ -98,10 +99,10 @@ class _CRG(LiteXModule):
 
         # # #
 
-        # Clk / Rst
+        # Clk / Rst.
         clk25 = ClockSignal("eth_tx") if with_ethernet else platform.request("eth_clocks").rx
 
-        # PLL
+        # PLL.
         self.pll = pll = S7PLL(speedgrade=-1)
         pll.register_clkin(clk25, 25e6)
         pll.create_clkout(self.cd_sys,       sys_clk_freq)
@@ -111,8 +112,8 @@ class _CRG(LiteXModule):
         pll.create_clkout(self.cd_lcd,       33.3e6)
         platform.add_false_path_constraints(self.cd_sys.clk, pll.clkin) # Ignore sys_clk to pll.clkin path created by SoC's rst.
 
+        # Idelay Ctrl.
         self.idelayctrl = S7IDELAYCTRL(self.cd_idelay)
-
 
 # ScopeSoC -----------------------------------------------------------------------------------------
 
@@ -276,7 +277,6 @@ class ScopeSoC(SoCCore):
 
         # ADC + Frontends
         # ---------------
-
         # SPI.
         pads = self.platform.request("spi")
         pads.miso = Signal()
@@ -308,7 +308,6 @@ class ScopeSoC(SoCCore):
         )
 
         # Analyzer ---------------------------------------------------------------------------------
-
         if with_analyzer:
             analyzer_signals = [
                 self.dma_reader_conv.source,
