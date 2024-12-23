@@ -84,6 +84,17 @@ scope_ios = [
         IOStandard("LVDS_25"),
         Misc("DIFF_TERM=TRUE"),
     ),
+
+    # SBUS.
+    ("sbus", 0,
+        Subsignal("d0_p", Pins("N19"), IOStandard("LVCMOS15")), # 4.
+        Subsignal("d0_n", Pins("N20"), IOStandard("LVCMOS15")), # 7.
+        Subsignal("d1_p", Pins("H19"), IOStandard("LVCMOS33")), # 16.
+        Subsignal("d1_n", Pins("H20"), IOStandard("LVCMOS33")), # 15.
+        Subsignal("c0",   Pins("G15"), IOStandard("LVCMOS33")), # 17.
+        Subsignal("c1",   Pins("G20"), IOStandard("LVCMOS33")), # 18.
+        Subsignal("c2",   Pins("H17"), IOStandard("LVCMOS33")), # 19.
+    ),
 ]
 
 # CRG ----------------------------------------------------------------------------------------------
@@ -118,7 +129,7 @@ class _CRG(LiteXModule):
 # ScopeSoC -----------------------------------------------------------------------------------------
 
 class ScopeSoC(SoCCore):
-    def __init__(self, sys_clk_freq=int(100e6), scope_ip="192.168.1.50", host_ip="192.168.1.100", host_udp_port=2000, with_analyzer=False):
+    def __init__(self, sys_clk_freq=int(100e6), scope_ip="192.168.1.50", host_ip="192.168.1.100", host_udp_port=2000, with_analyzer=False, with_sbus=False):
         # Platform ---------------------------------------------------------------------------------
         platform = siglent_sds1104xe.Platform()
         platform.add_extension(scope_ios)
@@ -306,6 +317,25 @@ class ScopeSoC(SoCCore):
             dst_ip       = host_ip,
             dst_udp_port = host_udp_port
         )
+
+        # SBUS -------------------------------------------------------------------------------------
+
+        if with_sbus:
+
+            # Test, just to probe pins with (another) scope.
+
+            sbus_pads  = platform.request("sbus")
+            sbus_count = Signal(32)
+            self.sync += sbus_count.eq(sbus_count + 1)
+            self.sync += [
+                sbus_pads.d0_p.eq(sbus_count[ 8]),
+                sbus_pads.d0_n.eq(sbus_count[ 9]),
+                sbus_pads.d1_p.eq(sbus_count[10]),
+                sbus_pads.d1_n.eq(sbus_count[11]),
+                sbus_pads.c0.eq(sbus_count[12]),
+                sbus_pads.c1.eq(sbus_count[13]),
+                sbus_pads.c2.eq(sbus_count[14]),
+            ]
 
         # Analyzer ---------------------------------------------------------------------------------
         if with_analyzer:
