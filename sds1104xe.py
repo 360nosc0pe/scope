@@ -86,6 +86,11 @@ scope_ios = [
     ),
 
     # SBUS.
+    ("sbus_dat", 0,
+        Subsignal("tx_p", Pins("N19")), # 4.
+        Subsignal("tx_n", Pins("N20")), # 7.
+        IOStandard("LVDS_25"),
+    ),
     ("sbus", 0,
         Subsignal("d0_p", Pins("N19"), IOStandard("LVCMOS15")), # 4.
         Subsignal("d0_n", Pins("N20"), IOStandard("LVCMOS15")), # 7.
@@ -139,6 +144,7 @@ class ScopeSoC(SoCCore):
             ident               = "ScopeSoC on Siglent SDS1104X-E",
             ident_version       = True,
             uart_name           = "crossover",
+            #cpu_type=None,
             cpu_type            = "vexriscv",
             cpu_variant         = "lite", # CPU only used to initialize DDR3 for now, Lite is enough.
             integrated_rom_size = 0x10000,
@@ -322,20 +328,52 @@ class ScopeSoC(SoCCore):
 
         if with_sbus:
 
-            # Test, just to probe pins with (another) scope.
+            from liteiclink.serwb.s7serdes import _S7SerdesTX
 
-            sbus_pads  = platform.request("sbus")
-            sbus_count = Signal(32)
-            self.sync += sbus_count.eq(sbus_count + 1)
-            self.sync += [
-                sbus_pads.d0_p.eq(sbus_count[ 8]),
-                sbus_pads.d0_n.eq(sbus_count[ 9]),
-                sbus_pads.d1_p.eq(sbus_count[10]),
-                sbus_pads.d1_n.eq(sbus_count[11]),
-                sbus_pads.c0.eq(sbus_count[12]),
-                sbus_pads.c1.eq(sbus_count[13]),
-                sbus_pads.c2.eq(sbus_count[14]),
+            self.cd_serdes   = ClockDomain()
+            self.cd_serdes4x = ClockDomain()
+
+            # SerDes PLL.
+            self.serdes_pll = serdes_pll = S7PLL(speedgrade=-1)
+            serdes_pll.register_clkin(ClockSignal("sys"), sys_clk_freq)
+            serdes_pll.create_clkout(self.cd_serdes,   625.00e6, margin=0)
+            serdes_pll.create_clkout(self.cd_serdes4x, 156.25e6, margin=0)
+
+            # SerDes.
+            sbus_serdes = _S7SerdesTX(pads=platform.request("sbus_dat"))
+            sbus_serdes = ClockDomainsRenamer({
+                "sys"   : "serdes",
+                "sys4x" : "serdes4x",
+            })(sbus_serdes)
+            self.add_module(name="sbus_serdes", module=sbus_serdes)
+
+            # Generate Comma.
+            self.comb += sbus_serdes.comma.eq(1)
+
+
+#            sbus_pads  = platform.request("sbus")
+#            sbus_count = Signal(32)
+#            self.sync += sbus_count.eq(sbus_count + 1)
+#            self.sync += [
+#                sbus_pads.d0_p.eq(sbus_count[ 8]),
+#                sbus_pads.d0_n.eq(sbus_count[ 9]),
+#                sbus_pads.d1_p.eq(sbus_count[10]),
+#                sbus_pads.d1_n.eq(sbus_count[11]),
+#                sbus_pads.c0.eq(sbus_count[12]),
+#                sbus_pads.c1.eq(sbus_count[13]),
+#                sbus_pads.c2.eq(sbus_count[14]),
+#            ]
+
+            analyzer_signals = [
+                sbus_serdes.datapath.encoder.sink,
+                sbus_serdes.datapath.converter.sink,
+                sbus_serdes.datapath.converter.source,
             ]
+            self.analyzer = LiteScopeAnalyzer(analyzer_signals,
+                depth        = 1024,
+                clock_domain = "serdes4x",
+                csr_csv      = "test/analyzer.csv"
+            )
 
         # Analyzer ---------------------------------------------------------------------------------
         if with_analyzer:
